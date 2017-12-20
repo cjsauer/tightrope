@@ -18,4 +18,15 @@
     (main/info "Generating fresh 'lein new' tightrope project.")
     (->files data
              ["project.clj" (render "project.clj" data)]
-             ["src/clj/{{nested-dirs}}/core.clj" (render "core.clj" data)])))
+             ["README.md" (render "README.md" data)]
+
+             ;; Clojure files
+             ["dev/user.clj" (render "user.clj" data)]
+             ["src/clj/{{nested-dirs}}/core.clj" (render "core.clj" data)]
+             ["src/clj/{{nested-dirs}}/styles.clj" (render "styles.clj" data)]
+             ["src/clj/{{nested-dirs}}/rest_routes.clj" (render "rest_routes.clj" data)]
+             ["src/clj/{{nested-dirs}}/http_server.clj" (render "http_server.clj" data)]
+
+             ;; ClojureScript files
+             ["src/cljs/{{nested-dirs}}/core.cljs" (render "core.cljs" data)]
+             )))
