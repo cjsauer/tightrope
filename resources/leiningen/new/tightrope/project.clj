@@ -4,7 +4,9 @@
 
   :dependencies [[org.clojure/clojure "1.9.0"]
                  [org.clojure/clojurescript "1.9.946" :scope "provided"]
+                 [org.clojure/tools.namespace "0.2.11" :scope "test"]
                  [lambdaisland/garden-watcher "0.3.2" :scope "test"]
+                 [environ "1.1.0"]
                  [mount "0.1.11"]
                  [http-kit "2.2.0"]
                  [compojure "1.6.0"]

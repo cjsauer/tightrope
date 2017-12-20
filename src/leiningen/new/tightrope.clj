@@ -24,6 +24,7 @@
              ["dev/user.clj" (render "user.clj" data)]
              ["src/clj/{{nested-dirs}}/core.clj" (render "core.clj" data)]
              ["src/clj/{{nested-dirs}}/styles.clj" (render "styles.clj" data)]
+             ["src/clj/{{nested-dirs}}/config.clj" (render "config.clj" data)]
              ["src/clj/{{nested-dirs}}/rest_routes.clj" (render "rest_routes.clj" data)]
              ["src/clj/{{nested-dirs}}/http_server.clj" (render "http_server.clj" data)]
 

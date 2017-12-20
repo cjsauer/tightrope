@@ -1,9 +1,14 @@
 (ns {{namespace}}.http-server
   (:require [mount.core :refer [defstate]]
             [org.httpkit.server :refer [run-server]]
-            [{{namespace}}.rest-routes :refer [app-routes]]))
+            [{{namespace}}.rest-routes :refer [app-routes]]
+            [{{namespace}}.config :refer [config]]))
+
+(defn- start-server
+  [{:as config :keys [http-port]}]
+  (run-server #'app-routes {:port http-port}))
 
 (defstate http-server
-  :start (run-server #'app-routes {:port 8080})
+  :start (start-server (config))
   :stop (when-not (nil? http-server)
           (http-server :timeout 100)))
