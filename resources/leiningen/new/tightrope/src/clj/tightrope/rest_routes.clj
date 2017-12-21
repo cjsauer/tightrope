@@ -4,6 +4,7 @@
             [hiccup.core :as hiccup]
             [hiccup.page :refer [html5 include-css include-js]]
             [ring.middleware.defaults :refer [api-defaults wrap-defaults]]
+            [ring.middleware.gzip :refer [wrap-gzip]]
             [ring.util.response :refer [content-type response]]))
 
 (defn home-view
@@ -37,4 +38,5 @@
 (defn app-handler
   []
   (-> #'app-routes
-      (wrap-defaults api-defaults)))
+      (wrap-defaults api-defaults)
+      (wrap-gzip)))

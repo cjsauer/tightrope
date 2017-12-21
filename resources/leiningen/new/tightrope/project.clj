@@ -7,6 +7,7 @@
                  [org.clojure/tools.namespace "0.2.11" :scope "test"]
                  [lambdaisland/garden-watcher "0.3.2" :scope "test"]
                  [ring/ring-defaults "0.3.1"]
+                 [bk/ring-gzip "0.2.1"]
                  [environ "1.1.0"]
                  [mount "0.1.11"]
                  [com.stuartsierra/component "0.3.2"]
