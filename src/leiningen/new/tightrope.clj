@@ -16,8 +16,10 @@
               :date (date)}]
     (main/info "Generating fresh 'lein new' tightrope project.")
     (->files data
+             ;; General
              ["project.clj" (render "project.clj" data)]
              ["README.md" (render "README.md" data)]
+             [".gitignore" (render ".gitignore" data)]
 
              ;; Clojure files
              ["dev/clj/user.clj" (render "dev/clj/user.clj" data)]

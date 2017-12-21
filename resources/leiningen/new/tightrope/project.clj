@@ -26,6 +26,7 @@
   :test-paths ["test/clj" "test/cljc"]
 
   :clean-targets ^{:protect false} ["resources/public/js/compiled"
+                                    "resources/public/css"
                                     "resources/public/vendor"
                                     "target"
                                     "test/js"]
