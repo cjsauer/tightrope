@@ -1,6 +1,6 @@
 (ns leiningen.new.tightrope
   (:require [leiningen.new.templates :refer [renderer name-to-path ->files multi-segment
-                                             sanitize-ns project-name year date]]
+                                             sanitize-ns project-name year date sanitize]]
             [leiningen.core.main :as main]))
 
 (def render (renderer "tightrope"))
@@ -12,6 +12,7 @@
         data {:raw-name name
               :name (project-name name)
               :namespace main-ns
+              :namespace-path (sanitize main-ns)
               :nested-dirs (name-to-path main-ns)
               :year (year)
               :date (date)}]
@@ -29,5 +30,14 @@
              ["src/clj/{{nested-dirs}}/http_server.clj" (render "http_server.clj" data)]
 
              ;; ClojureScript files
+             ["dev/cljs/user.cljs" (render "user.cljs" data)]
              ["src/cljs/{{nested-dirs}}/core.cljs" (render "core.cljs" data)]
              )))
+
+(comment
+  (let [namespace (sanitize (multi-segment (sanitize-ns "cjsauer/example-app")))]
+    namespace)
+
+  (name-to-path "example-app")
+  (sanitize (project-name "cjsauer/my-app"))
+  )

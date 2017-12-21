@@ -2,12 +2,22 @@
   (:require [compojure.core :refer :all]
             [compojure.route :as route]
             [hiccup.core :as hiccup]
+            [hiccup.page :refer [html5 include-css include-js]]
             [ring.middleware.defaults :refer [api-defaults wrap-defaults]]
             [ring.util.response :refer [content-type response]]))
 
 (defn home-view
   [req]
-  [:h1 "Hello, tightrope!"])
+  (html5
+   [:head
+    [:meta {:charset "UTF-8"}]
+    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+    (include-css "css/style.css")]
+   [:body
+    [:h1 "Hello, tightrope!"]
+    (include-js "js/compiled/example-app.js")
+    [:script {:type "text/javascript"}
+     "{{namespace-path}}.core.bootstrap();"]]))
 
 (def not-found-view
   [:p "Oops! The page you're looking for doesn't exist!"])
