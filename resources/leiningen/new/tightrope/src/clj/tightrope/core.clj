@@ -1,6 +1,8 @@
 (ns {{namespace}}.core
-  (:gen-class))
+    (:gen-class)
+    (:require [mount.core :as mount]
+              [{{namespace}}.http-server]))
 
 (defn -main
   [& args]
-  (println "Hello, tightrope!"))
+  (mount/start))

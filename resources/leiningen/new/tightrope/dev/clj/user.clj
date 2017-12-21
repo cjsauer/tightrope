@@ -6,7 +6,7 @@
             [figwheel-sidecar.config :as fw-cfg]
             [figwheel-sidecar.system :as fw-sys]
             [garden-watcher.core :refer [new-garden-watcher]]
-            [{{namespace}}.http-server]))
+            [{{namespace}}.core :as core]))
 
 (defstate figwheel
   :start (-> (fw-sys/figwheel-system (fw-cfg/fetch-config))
