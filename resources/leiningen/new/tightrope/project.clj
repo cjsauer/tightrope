@@ -45,7 +45,7 @@
               :plugins [[lein-figwheel "0.5.14"]
                         [lein-doo "0.1.8"]]
 
-              :source-paths ["dev"]
+              :source-paths ["dev/clj"]
               :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}}
 
              :uberjar
@@ -59,7 +59,7 @@
 
   :cljsbuild {:builds
               [{:id "app"
-                :source-paths ["src/cljs" "src/cljc" "dev"]
+                :source-paths ["src/cljs" "src/cljc" "dev/cljs"]
 
                 :figwheel {}
 

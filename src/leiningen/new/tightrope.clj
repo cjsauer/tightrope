@@ -20,14 +20,14 @@
              ["README.md" (render "README.md" data)]
 
              ;; Clojure files
-             ["dev/user.clj" (render "user.clj" data)]
-             ["src/clj/{{nested-dirs}}/core.clj" (render "core.clj" data)]
-             ["src/clj/{{nested-dirs}}/styles.clj" (render "styles.clj" data)]
-             ["src/clj/{{nested-dirs}}/config.clj" (render "config.clj" data)]
-             ["src/clj/{{nested-dirs}}/rest_routes.clj" (render "rest_routes.clj" data)]
-             ["src/clj/{{nested-dirs}}/http_server.clj" (render "http_server.clj" data)]
+             ["dev/clj/user.clj" (render "dev/clj/user.clj" data)]
+             ["src/clj/{{nested-dirs}}/core.clj" (render "/src/clj/tightrope/core.clj" data)]
+             ["src/clj/{{nested-dirs}}/styles.clj" (render "src/clj/tightrope/styles.clj" data)]
+             ["src/clj/{{nested-dirs}}/config.clj" (render "src/clj/tightrope/config.clj" data)]
+             ["src/clj/{{nested-dirs}}/rest_routes.clj" (render "src/clj/tightrope/rest_routes.clj" data)]
+             ["src/clj/{{nested-dirs}}/http_server.clj" (render "src/clj/tightrope/http_server.clj" data)]
 
              ;; ClojureScript files
-             ["dev/cljs/user.cljs" (render "user.cljs" data)]
-             ["src/cljs/{{nested-dirs}}/core.cljs" (render "core.cljs" data)]
+             ["dev/cljs/user.cljs" (render "dev/cljs/user.cljs" data)]
+             ["src/cljs/{{nested-dirs}}/core.cljs" (render "src/cljs/tightrope/core.cljs" data)]
              )))
