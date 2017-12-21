@@ -1,5 +1,7 @@
 # tightrope
 
+[![Clojars Project](https://img.shields.io/clojars/v/tightrope/lein-template.svg)](https://clojars.org/tightrope/lein-template)
+
 An opinionated, real-time focused, single-page application template for
 Clojure(Script) applications.
 
