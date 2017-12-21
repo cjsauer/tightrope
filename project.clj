@@ -1,4 +1,4 @@
-(defproject tightrope/lein-template "0.1.0-SNAPSHOT"
+(defproject tightrope/lein-template "0.1.0"
   :description "An opinionated, real-time application template for Clojure(Script)"
   :url "https://github.com/cjsauer/tightrope"
   :license {:name "Eclipse Public License"
