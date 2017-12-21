@@ -21,17 +21,24 @@
              ["README.md" (render "README.md" data)]
              [".gitignore" (render ".gitignore" data)]
 
-             ;; Clojure files
+             ;; Clojure source files
              ["dev/clj/user.clj" (render "dev/clj/user.clj" data)]
-             ["src/clj/{{nested-dirs}}/core.clj" (render "/src/clj/tightrope/core.clj" data)]
+             ["src/clj/{{nested-dirs}}/core.clj" (render "src/clj/tightrope/core.clj" data)]
              ["src/clj/{{nested-dirs}}/styles.clj" (render "src/clj/tightrope/styles.clj" data)]
              ["src/clj/{{nested-dirs}}/config.clj" (render "src/clj/tightrope/config.clj" data)]
              ["src/clj/{{nested-dirs}}/rest_routes.clj" (render "src/clj/tightrope/rest_routes.clj" data)]
              ["src/clj/{{nested-dirs}}/http_server.clj" (render "src/clj/tightrope/http_server.clj" data)]
 
-             ;; ClojureScript files
+             ;; Clojure test files
+             ["test/clj/{{nested-dirs}}/core_test.clj" (render "test/clj/tightrope/core_test.clj" data)]
+
+             ;; ClojureScript source files
              ["dev/cljs/user.cljs" (render "dev/cljs/user.cljs" data)]
              ["src/cljs/{{nested-dirs}}/core.cljs" (render "src/cljs/tightrope/core.cljs" data)]
+
+             ;; ClojureScript test files
+             ["test/cljs/{{nested-dirs}}/core_test.cljs" (render "test/cljs/tightrope/core_test.cljs" data)]
+             ["test/cljs/{{nested-dirs}}/test_runner.cljs" (render "test/cljs/tightrope/test_runner.cljs" data)]
 
              ;; Resources
              ["resources/.gitkeep" (render "resources/.gitkeep" data)]
