@@ -3,8 +3,6 @@
                                              sanitize-ns project-name year date sanitize]]
             [leiningen.core.main :as main]))
 
-(def render (renderer "tightrope"))
-
 (defn tightrope
   [name]
   (let [render (renderer "tightrope")
@@ -33,11 +31,3 @@
              ["dev/cljs/user.cljs" (render "user.cljs" data)]
              ["src/cljs/{{nested-dirs}}/core.cljs" (render "core.cljs" data)]
              )))
-
-(comment
-  (let [namespace (sanitize (multi-segment (sanitize-ns "cjsauer/example-app")))]
-    namespace)
-
-  (name-to-path "example-app")
-  (sanitize (project-name "cjsauer/my-app"))
-  )
