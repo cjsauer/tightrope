@@ -1,6 +1,6 @@
 (ns {{namespace}}.config
-  (:require [environ.core :refer [env]]))
+  (:require [environ.core :refer [env]]
+            [mount.core :refer [defstate]]))
 
-(defn config
-  []
-  {:http-port (or (env :http-port) 8080)})
+(defstate config
+  :start {:port (or (env :port) 8080)})
