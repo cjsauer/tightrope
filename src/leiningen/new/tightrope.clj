@@ -30,4 +30,7 @@
              ;; ClojureScript files
              ["dev/cljs/user.cljs" (render "dev/cljs/user.cljs" data)]
              ["src/cljs/{{nested-dirs}}/core.cljs" (render "src/cljs/tightrope/core.cljs" data)]
+
+             ;; Resources
+             ["resources/.gitkeep" (render "resources/.gitkeep" data)]
              )))
