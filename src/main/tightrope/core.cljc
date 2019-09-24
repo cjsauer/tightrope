@@ -70,9 +70,14 @@
   [state]
   (-> state :rum/args first))
 
+(defn- props-or-opts
+  [props opts k]
+  (or (get props k)
+      (get opts k)))
+
 (defn- derive-lookup
   [props opts]
-  (or (:lookup props)
+  (or (props-or-opts props opts :lookup)
       (let [idents (:idents opts)]
         (apply entity->lookup props idents))))
 

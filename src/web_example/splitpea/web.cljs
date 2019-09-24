@@ -14,7 +14,7 @@
   []
   (rope/reset-registry! app-ctx)
   (rum/mount
-   (rope/ctx-provider app-ctx (root/root {:lookup [:db/ident ::root/root]}))
+   (rope/ctx-provider app-ctx (root/root))
    (.getElementById js/document "app")))
 
 (defn start!

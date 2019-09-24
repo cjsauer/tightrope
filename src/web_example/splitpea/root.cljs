@@ -31,7 +31,7 @@
 (def *root
   {:init-tx {:db/ident ::root
              :user/me  (:init-tx *user-dashboard)}
-   :idents  [:db/ident]
+   :lookup  [:db/ident ::root]
    :query   [:user/me]})
 
 (rum/defc root
