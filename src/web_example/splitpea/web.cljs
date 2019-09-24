@@ -5,10 +5,12 @@
             [datascript.core :as ds]
             [tightrope.core :as rope]
             [splitpea.model :as model]
-            [splitpea.root :as root]))
+            [splitpea.root :as root]
+            [splitpea.resolvers :as resolvers]))
 
 (defonce app-ctx (rope/make-framework-context
-                  {:schema model/schema}))
+                  {:schema model/schema
+                   :resolvers resolvers/main}))
 
 (defn ^:dev/after-load mount
   []

@@ -8,14 +8,14 @@
 (def *user-dashboard
   {:init-tx {:user/handle "Calvin"}
    :idents  [:user/handle]
-   :query   [:user/handle]})
+   :query   [:user/greeting]})
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
   [{user ::rope/data}]
-  (let [greeting (str "Hello, " (:user/handle user))]
-    [:div
-     [:h1 {:style {:font-size "2em"}} greeting]]))
+  [:div
+   [:pre (str user)]
+   [:h1 {:style {:font-size "2em"}} (:user/greeting user)]])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login
