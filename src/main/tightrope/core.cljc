@@ -28,6 +28,14 @@
   [conn lookup m]
   (ds/transact! conn [(upsert lookup m)]))
 
+(defn ->lookup-by
+  [e & ks]
+  (loop [k (first ks)]
+    (when k
+      (if (contains? e k)
+        [k (get e k)]
+        (recur (next ks))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Framework code
 
@@ -53,20 +61,18 @@
   [state]
   (-> state :rum/args first))
 
-(defn- props-or-opts
-  [state opts k]
-  (let [props (get-props state)]
-    (or (k props)
-        (k opts))))
+(defn- derive-lookup
+  [props opts]
+  (or (:lookup props)
+      (let [idents (:idents opts)]
+        (apply ->lookup-by props idents))))
 
 (defn- parse-state
   [state & [opts]]
-  (let [props        (get-props state)
-        parsed-props {:lookup (props-or-opts state opts :lookup)
-                      :query  (props-or-opts state opts :query)
-                      :props  props}]
-    (merge parsed-props
-           (get-ctx state))))
+  (let [ctx            (get-ctx state)
+        props          (get-props state)
+        derived-lookup {:lookup (derive-lookup props opts)}]
+    (merge ctx opts derived-lookup {:props props})))
 
 (defn- assoc-args
   [state props]
@@ -79,17 +85,17 @@
        :as   opts}]]
   {:static-properties {:contextType TightropeContext}
    ;; -------------------------------------------------------------------------------
-   :did-mount         (fn did-mount [{:rum/keys [react-component] :as state}]
-                        (let [{:keys [conn
-                                      registry
-                                      lookup]} (parse-state state opts)
-                              rerender-fn      #(rum/request-render react-component)]
-                          (when mount-tx
-                            (ds/transact! conn mount-tx))
-                          (if lookup
-                            (do (swap! registry add-fn-to-registry lookup rerender-fn)
-                                (assoc state :rerender-fn rerender-fn))
-                            state)))
+   :will-mount         (fn did-mount [{:rum/keys [react-component] :as state}]
+                         (let [{:keys [conn
+                                       registry
+                                       lookup]} (parse-state state opts)
+                               rerender-fn      #(rum/request-render react-component)]
+                           (when mount-tx
+                             (ds/transact! conn mount-tx))
+                           (if lookup
+                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
+                                 (assoc state :rerender-fn rerender-fn))
+                             state)))
    ;; -------------------------------------------------------------------------------
    :did-unmount       (fn did-unmount [state]
                         (let [{:keys [conn
@@ -112,8 +118,8 @@
                                       props]} (parse-state state opts)
                               pull-result     (try-pull (ds/db conn) query lookup)
                               full-query      [{lookup query}]
-                              parse-env       {:conn      conn
-                                               ::p/entity {lookup pull-result}}
+                              parse-env       (cond-> {:conn conn}
+                                                pull-result (assoc ::p/entity {lookup pull-result}))
                               parse-result    (parser parse-env full-query)
                               data            (get parse-result lookup)
                               new-props       (cond-> props
@@ -152,6 +158,7 @@
     ::p/mutate  pc/mutate-async
     ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
                  p/error-handler-plugin
+                 p/elide-special-outputs-plugin
                  p/trace-plugin]}))
 
 (defn make-framework-context
