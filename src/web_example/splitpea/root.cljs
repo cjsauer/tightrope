@@ -12,10 +12,9 @@
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
   [{user ::rope/data}]
-  (when user
-    (let [greeting (str "Hello, " (:user/handle user))]
-      [:div
-       [:h1 {:style {:font-size "2em"}} greeting]])))
+  (let [greeting (str "Hello, " (:user/handle user))]
+    [:div
+     [:h1 {:style {:font-size "2em"}} greeting]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login
