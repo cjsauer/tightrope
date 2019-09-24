@@ -5,8 +5,28 @@
             [datascript.core :as ds]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
-            [com.wsscode.pathom.sugar]
-            [cjsauer.pathom.connect.datascript :as pcd]))
+            [com.wsscode.pathom.sugar]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Utilities
+
+(defn try-pull
+  [db selector eid]
+  (try
+    (ds/pull db selector eid)
+    #?(:clj  (catch Exception e nil)
+       :cljs (catch :default e nil))))
+
+(defn upsert
+  [lookup m]
+  (let [lookup-map (if (vector? lookup)
+                     (apply hash-map lookup)
+                     {:db/id lookup})]
+    (merge lookup-map m)))
+
+(defn upsert!
+  [conn lookup m]
+  (ds/transact! conn [(upsert lookup m)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Framework code
@@ -33,16 +53,17 @@
   [state]
   (-> state :rum/args first))
 
-(defn- get-lookup
-  [state opts]
+(defn- props-or-opts
+  [state opts k]
   (let [props (get-props state)]
-    (or (:lookup props)
-        (:lookup opts))))
+    (or (k props)
+        (k opts))))
 
 (defn- parse-state
   [state & [opts]]
   (let [props        (get-props state)
-        parsed-props {:lookup (get-lookup state opts)
+        parsed-props {:lookup (props-or-opts state opts :lookup)
+                      :query  (props-or-opts state opts :query)
                       :props  props}]
     (merge parsed-props
            (get-ctx state))))
@@ -70,7 +91,7 @@
                                 (assoc state :rerender-fn rerender-fn))
                             state)))
    ;; -------------------------------------------------------------------------------
-   :did-unmount      (fn did-unmount [state]
+   :did-unmount       (fn did-unmount [state]
                         (let [{:keys [conn
                                       registry
                                       lookup]} (parse-state state opts )
@@ -85,9 +106,16 @@
    ;; -------------------------------------------------------------------------------
    :before-render     (fn before-render [state]
                         (let [{:keys [conn
+                                      parser
                                       lookup
+                                      query
                                       props]} (parse-state state opts)
-                              data            (ds/entity (ds/db conn) lookup)
+                              pull-result     (try-pull (ds/db conn) query lookup)
+                              full-query      [{lookup query}]
+                              parse-env       {:conn      conn
+                                               ::p/entity {lookup pull-result}}
+                              parse-result    (parser parse-env full-query)
+                              data            (get parse-result lookup)
                               new-props       (cond-> props
                                                 data (assoc ::data data)
                                                 conn (assoc ::conn conn))]
@@ -114,28 +142,27 @@
       (rrf))))
 
 (defn- default-parser
-  [{:keys [conn]}]
-  (p/async-parser
+  [{:keys [resolvers]}]
+  (p/parser
    {::p/env     {::p/reader               [p/map-reader
-                                           pc/async-reader2
+                                           pc/reader2
                                            pc/open-ident-reader
                                            p/env-placeholder-reader]
                  ::p/placeholder-prefixes #{">"}}
     ::p/mutate  pc/mutate-async
-    ::p/plugins [(pc/connect-plugin {::pc/register []})
-                 (pcd/datascript-connect-plugin {::pcd/conn conn})
+    ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
                  p/error-handler-plugin
                  p/trace-plugin]}))
 
 (defn make-framework-context
-  [{:keys [schema parser]}]
+  [{:keys [schema parser resolvers]}]
   (let [conn     (ds/create-conn schema)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
     {:conn     conn
      :registry registry
      :parser   (or parser
-                   (default-parser {:conn conn}))
+                   (default-parser {:resolvers resolvers}))
      }))
 
 (defn ctx-provider
@@ -147,14 +174,3 @@
 (defn reset-registry!
   [ctx]
   (reset! (:registry ctx) {}))
-
-(defn upsert
-  [lookup m]
-  (let [lookup-map (if (vector? lookup)
-                     (apply hash-map lookup)
-                     {:db/id lookup})]
-    (merge lookup-map m)))
-
-(defn upsert!
-  [conn lookup m]
-  (ds/transact! conn [(upsert lookup m)]))

@@ -1,8 +1,6 @@
 {:paths ["src/main"]
  :deps  {compojure                 {:mvn/version "1.6.1"}
-         com.wsscode/pathom        {:mvn/version "2.2.25"}
-         cjsauer/pathom-datascript {:git/url "https://github.com/cjsauer/pathom-datascript"
-                                    :sha     "939e3665c2e80ad8c73e47a106dc9be0dd186057"}}
+         com.wsscode/pathom        {:mvn/version "2.2.25"}}
 
  :aliases
  {:v1.10.1     {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}

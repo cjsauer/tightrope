@@ -140,43 +140,29 @@
 
 (def root-init-tx
   [{:db/ident ::root
-    :root/new-topic (conj new-topic-init-tx [:db/ident ::new-topic])}])
+    :a 1
+    :b 2
+    :c 3
+    }])
 
 (rum/defc root
-  < (rope/ds-mixin {:lookup [:db/ident ::root]})
+  < (rope/ds-mixin {:lookup [:db/ident ::root]
+                    :query  [:a :b :c]})
   [{::rope/keys [data]}]
-  ;; Wait...we now have a lazy entity here. Why don't we just pass that down to subcomponents?
-  ;; Answer: YES! Do that! The ds-mixin is a tool for when that's not possible.
-  ;; When is that not possible?
-  ;;
-  ;; If you took this to the extreme, every event handler would rise to the top of the program...
-  ;;
-  ;; The fact that we're using Datascript as the state/reactive mechanism is kind of an implementation
-  ;; detail. This is why using Pathom on the client is so useful. There are more data sources than just
-  ;; app state. Local storage, cookies, and even APIs.
-  ;;
-  ;; It's fine tho to use Datascript as the reactive UI piece. The paradigm of mounting entities to the
-  ;; UI is still awesome. And using Datascript in client-side resolvers is really nice. It might even
-  ;; be possible to write a Pathom plugin that integrates Datascript in an automated fashion. This would
-  ;; preclude the need for devs to write resolvers for things in app state; you would only need to write
-  ;; resolvers for "out of band" data.
-  ;;
-  ;; The primary difficulty in UI dev is that rarely, if ever, does the data that you need actually
-  ;; come packaged in the same shape as your UI tree. So, you can either hand me tree-like data that
-  ;; you've already packaged, OR you can hand me a database that can produce arbitrary tree-like data
-  ;; on-demand from a lookup. You can control the lookup, or the database will provide one for you (:db/id).
-  (let [new-topic-data (:root/new-topic data)]
-    [:div
-     {:style {:height "100%"
-              :flex-direction "column"
-              :justify-content "space-between"}}
-     [:div
-      {:style {:height "10vh"}}
-      [:h1 {:style {:font-size "2em"}} "splitpea"]
-      (new-topic {:lookup (:db/id new-topic-data)
+  [:div
+   {:style {:height "100%"
+            :flex-direction "column"
+            :justify-content "space-between"}}
+   [:div
+    {:style {:height "10vh"}}
+    [:h1 {:style {:font-size "2em"}} "splitpea"]
+    [:p (str (:a data))]
+    [:p (str (:b data))]
+    [:p (str (:c data))]
+    #_(new-topic {:lookup (:db/id new-topic-data)
                   :placeholder "start a new topic"
                   :button-label "Post"})]
-     (feed-window)]))
+   #_(feed-window)])
 
 (defn ^:dev/after-load mount
   []
