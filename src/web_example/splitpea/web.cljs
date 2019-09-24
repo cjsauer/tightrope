@@ -19,5 +19,5 @@
 
 (defn start!
   []
-  (ds/transact! (:conn app-ctx) (:init-tx root/*root))
+  (ds/transact! (:conn app-ctx) [(:init-tx root/*root)])
   (mount))

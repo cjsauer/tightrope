@@ -28,13 +28,22 @@
   [conn lookup m]
   (ds/transact! conn [(upsert lookup m)]))
 
-(defn ->lookup-by
+(defn entity->lookup
   [e & ks]
   (loop [k (first ks)]
     (when k
       (if (contains? e k)
         [k (get e k)]
         (recur (next ks))))))
+
+(defn eids->lookups
+  [db & eids]
+  (ds/q '[:find ?attr ?value
+          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
+          :where
+          [(= ?avalue :db.unique/identity)]
+          [?eids ?attr ?value]]
+        db (:schema db) eids))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Framework code
@@ -65,7 +74,7 @@
   [props opts]
   (or (:lookup props)
       (let [idents (:idents opts)]
-        (apply ->lookup-by props idents))))
+        (apply entity->lookup props idents))))
 
 (defn- parse-state
   [state & [opts]]
@@ -78,6 +87,23 @@
   [state props]
   (assoc state :rum/args [props]))
 
+(defn- inject-known-lookups
+  [db e]
+  (if-let [eid (:db/id e)]
+    (let [lookups (eids->lookups db eid)]
+      (into e lookups))
+    e))
+
+(defn- inject-known-lookups-recursively
+  [db e]
+  (let [f (fn [new-e [k v]]
+            (if (map? v)
+              (->> (inject-known-lookups db v)
+                   (inject-known-lookups-recursively db)
+                   (assoc new-e k))
+              (assoc new-e k v)))]
+   (reduce f {} e)))
+
 (def ^:private TightropeContext (react/createContext))
 
 (defn ds-mixin
@@ -85,17 +111,17 @@
        :as   opts}]]
   {:static-properties {:contextType TightropeContext}
    ;; -------------------------------------------------------------------------------
-   :will-mount         (fn did-mount [{:rum/keys [react-component] :as state}]
-                         (let [{:keys [conn
-                                       registry
-                                       lookup]} (parse-state state opts)
-                               rerender-fn      #(rum/request-render react-component)]
-                           (when mount-tx
-                             (ds/transact! conn mount-tx))
-                           (if lookup
-                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
-                                 (assoc state :rerender-fn rerender-fn))
-                             state)))
+   :will-mount        (fn did-mount [{:rum/keys [react-component] :as state}]
+                        (let [{:keys [conn
+                                      registry
+                                      lookup]} (parse-state state opts)
+                              rerender-fn      #(rum/request-render react-component)]
+                          (when mount-tx
+                            (ds/transact! conn mount-tx))
+                          (if lookup
+                            (do (swap! registry add-fn-to-registry lookup rerender-fn)
+                                (assoc state :rerender-fn rerender-fn))
+                            state)))
    ;; -------------------------------------------------------------------------------
    :did-unmount       (fn did-unmount [state]
                         (let [{:keys [conn
@@ -116,31 +142,24 @@
                                       lookup
                                       query
                                       props]} (parse-state state opts)
-                              pull-result     (try-pull (ds/db conn) query lookup)
+                              db              (ds/db conn)
+                              pull-result     (try-pull db query lookup)
                               full-query      [{lookup query}]
                               parse-env       (cond-> {:conn conn}
                                                 pull-result (assoc ::p/entity {lookup pull-result}))
                               parse-result    (parser parse-env full-query)
-                              data            (get parse-result lookup)
+                              data            (->> (get parse-result lookup)
+                                                   (inject-known-lookups-recursively db))
                               new-props       (cond-> props
                                                 data (assoc ::data data)
                                                 conn (assoc ::conn conn))]
                           (assoc-args state new-props)))
    })
 
-(defn eids->lookups
-  [db eids]
-  (ds/q '[:find ?attr ?value
-          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
-          :where
-          [(= ?avalue :db.unique/identity)]
-          [?eids ?attr ?value]]
-        db (:schema db) eids))
-
 (defn on-tx
   [registry {:keys [db-after tx-data]}]
   (let [affected-eids    (map :e tx-data)
-        affected-lookups (concat (eids->lookups db-after affected-eids)
+        affected-lookups (concat (apply eids->lookups db-after affected-eids)
                                  affected-eids)
         rerender-fns     (mapcat #(get @registry %)
                                  (set affected-lookups))]

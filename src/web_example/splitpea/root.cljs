@@ -6,8 +6,9 @@
 ;; User Dashboard
 
 (def *user-dashboard
-  {:idents [:user/handle]
-   :query  [:user/handle]})
+  {:init-tx {:user/handle "Calvin"}
+   :idents  [:user/handle]
+   :query   [:user/handle]})
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
@@ -28,9 +29,10 @@
 ;; Root
 
 (def *root
-  {:init-tx [{:db/ident ::root}]
+  {:init-tx {:db/ident ::root
+             :user/me  (:init-tx *user-dashboard)}
    :idents  [:db/ident]
-   :query   [{:user/me (:query *user-dashboard)}]})
+   :query   [:user/me]})
 
 (rum/defc root
   < (rope/ds-mixin *root)
