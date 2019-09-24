@@ -2,7 +2,11 @@
   "Mount datascript entities to the UI"
   (:require ["react" :as react]
             [rum.core :as rum]
-            [datascript.core :as ds]))
+            [datascript.core :as ds]
+            [com.wsscode.pathom.core :as p]
+            [com.wsscode.pathom.connect :as pc]
+            [com.wsscode.pathom.sugar]
+            [cjsauer.pathom.connect.datascript :as pcd]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Framework code
@@ -109,14 +113,30 @@
     (doseq [rrf rerender-fns]
       (rrf))))
 
+(defn- default-parser
+  [{:keys [conn]}]
+  (p/async-parser
+   {::p/env     {::p/reader               [p/map-reader
+                                           pc/async-reader2
+                                           pc/open-ident-reader
+                                           p/env-placeholder-reader]
+                 ::p/placeholder-prefixes #{">"}}
+    ::p/mutate  pc/mutate-async
+    ::p/plugins [(pc/connect-plugin {::pc/register []})
+                 (pcd/datascript-connect-plugin {::pcd/conn conn})
+                 p/error-handler-plugin
+                 p/trace-plugin]}))
+
 (defn make-framework-context
-  [{:keys [schema]}]
+  [{:keys [schema parser]}]
   (let [conn     (ds/create-conn schema)
-        registry (atom {})
-        parser   {}]
+        registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
-    {:conn conn
-     :registry registry}))
+    {:conn     conn
+     :registry registry
+     :parser   (or parser
+                   (default-parser {:conn conn}))
+     }))
 
 (defn ctx-provider
   [ctx & children]

@@ -189,4 +189,3 @@
   []
   (ds/transact! (:conn app-ctx) root-init-tx)
   (mount))
-
