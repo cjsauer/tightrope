@@ -3,14 +3,16 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [rum.core :as rum]
             [datascript.core :as ds]
-            [tightrope.core :as rope]
+            [tightrope.rum :as rope]
             [splitpea.model :as model]
             [splitpea.root :as root]
             [splitpea.resolvers :as resolvers]))
 
+
 (defonce app-ctx (rope/make-framework-context
-                  {:schema model/schema
-                   :resolvers resolvers/main}))
+                  {:schema    model/schema
+                   :resolvers resolvers/main
+                   :remote    {:path "/api"}}))
 
 (defn ^:dev/after-load mount
   []

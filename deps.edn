@@ -1,14 +1,14 @@
 {:paths ["src/main"]
- :deps  {compojure                 {:mvn/version "1.6.1"}
-         com.wsscode/pathom        {:mvn/version "2.2.25"}}
+ :deps  {compojure              {:mvn/version "1.6.1"}
+         com.wsscode/pathom     {:mvn/version "2.2.25"}
+         org.clojure/core.async {:mvn/version "0.4.500"}
+         cljs-http              {:mvn/version "0.1.46"}}
 
  :aliases
  {:v1.10.1     {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}
-  :provided    {:extra-deps {rum                    {:mvn/version "0.11.3"}
-                             datascript             {:mvn/version "0.18.4"}
-                             org.clojure/core.async {:mvn/version "0.4.500"}}}
-  :web-example {:extra-paths ["src/web_example"]
-                :extra-deps  {cljs-http {:mvn/version "0.1.46"}}}
+  :provided    {:extra-deps {rum        {:mvn/version "0.11.3"}
+                             datascript {:mvn/version "0.18.4"}}}
+  :web-example {:extra-paths ["src/web_example"]}
   :dev         {:extra-paths ["src/dev"]
                 :extra-deps  {thheller/shadow-cljs {:mvn/version "2.8.56"}}}
   :test        {:extra-paths ["src/test"]}

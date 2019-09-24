@@ -1,21 +1,29 @@
 (ns splitpea.root
   (:require [rum.core :as rum]
-            [tightrope.core :as rope]))
+            [tightrope.rum :as rope]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; User Dashboard
 
 (def *user-dashboard
-  {:init-tx {:user/handle "Calvin"}
-   :idents  [:user/handle]
-   :query   [:user/greeting]})
+  {:init-tx  {:user/handle "Calvin"}
+   :idents   [:user/handle]
+   :query    [:user/greeting :server/time :ui/freshening?]
+   :freshen? true})
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
-  [{user ::rope/data}]
-  [:div
-   [:pre (str user)]
-   [:h1 {:style {:font-size "2em"}} (:user/greeting user)]])
+  [{user ::rope/data
+    freshen! ::rope/freshen!}]
+  (if (:ui/freshening? user)
+    [:div [:p "Loading..."]]
+    [:div
+     [:pre (str user)]
+     [:h1 {:style {:font-size "2em"}} (:user/greeting user)]
+     (when-let [server-time (:server/time user)]
+       [:p server-time])
+     [:button {:on-click freshen!} "Freshen!"]]))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login

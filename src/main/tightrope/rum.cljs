@@ -1,11 +1,12 @@
-(ns tightrope.core
+(ns tightrope.rum
   "Mount datascript entities to the UI"
   (:require ["react" :as react]
             [rum.core :as rum]
             [datascript.core :as ds]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
-            [com.wsscode.pathom.sugar]))
+            [com.wsscode.pathom.sugar]
+            [tightrope.remote :as remote]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -14,8 +15,7 @@
   [db selector eid]
   (try
     (ds/pull db selector eid)
-    #?(:clj  (catch Exception e nil)
-       :cljs (catch :default e nil))))
+    (catch :default e nil)))
 
 (defn upsert
   [lookup m]
@@ -112,17 +112,20 @@
 (def ^:private TightropeContext (react/createContext))
 
 (defn ds-mixin
-  [& [{:keys [mount-tx unmount-tx]
+  [& [{:keys [mount-tx unmount-tx freshen?]
        :as   opts}]]
   {:static-properties {:contextType TightropeContext}
    ;; -------------------------------------------------------------------------------
-   :will-mount        (fn did-mount [{:rum/keys [react-component] :as state}]
+   :will-mount        (fn will-mount [{:rum/keys [react-component] :as state}]
                         (let [{:keys [conn
                                       registry
-                                      lookup]} (parse-state state opts)
-                              rerender-fn      #(rum/request-render react-component)]
+                                      lookup
+                                      query] :as s} (parse-state state opts)
+                              rerender-fn #(rum/request-render react-component)]
                           (when mount-tx
                             (ds/transact! conn mount-tx))
+                          (when (and freshen? lookup query)
+                            (remote/freshen! s lookup query))
                           (if lookup
                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
                                 (assoc state :rerender-fn rerender-fn))
@@ -146,7 +149,7 @@
                                       parser
                                       lookup
                                       query
-                                      props]} (parse-state state opts)
+                                      props] :as s} (parse-state state opts)
                               db              (ds/db conn)
                               pull-result     (try-pull db query lookup)
                               full-query      [{lookup query}]
@@ -155,9 +158,12 @@
                               parse-result    (parser parse-env full-query)
                               data            (->> (get parse-result lookup)
                                                    (inject-known-lookups-recursively db))
+                              freshen!        (partial remote/freshen! s lookup query)
                               new-props       (cond-> props
                                                 data (assoc ::data data)
-                                                conn (assoc ::conn conn))]
+                                                conn (assoc ::conn conn)
+                                                true (assoc ::freshen! freshen!)
+                                                )]
                           (assoc-args state new-props)))
    })
 
@@ -186,7 +192,7 @@
                  p/trace-plugin]}))
 
 (defn make-framework-context
-  [{:keys [schema parser resolvers]}]
+  [{:keys [schema parser resolvers remote]}]
   (let [conn     (ds/create-conn schema)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
@@ -194,6 +200,7 @@
      :registry registry
      :parser   (or parser
                    (default-parser {:resolvers resolvers}))
+     :remote   remote
      }))
 
 (defn ctx-provider
