@@ -7,4 +7,13 @@
    ::pc/output #{:user/greeting}}
   {:user/greeting (str "Hello, " handle)})
 
-(def main [greeting-resolver])
+(pc/defmutation login!
+  [_ {:login/keys [handle]}]
+  {::pc/input #{:login/handle}
+   ::pc/output #{:user/me}}
+  #?(:clj (println "SERVER LOGIN")
+     :cljs (println "CLIENT LOGIN"))
+  {:user/me {:user/handle handle}})
+
+(def main [greeting-resolver
+           login!])

@@ -3,8 +3,8 @@
             [cljs.core.async :as a :refer [go <!]]
             [datascript.core :as ds]))
 
-(defn- handle-success
-  [{:keys [conn]} lookup query response]
+(defn- handle-freshen-success
+  [{:keys [conn]} lookup response]
   (let [{:keys [body]}     response
         entity             (get body lookup)
         entity-with-lookup (conj entity lookup)
@@ -22,6 +22,31 @@
             {:keys [status] :as response}
             (<! (http/post (:path remote) {:edn-params full-query}))]
         (cond
-          (< status 300) (handle-success ctx lookup query response)
+          (< status 300) (handle-freshen-success ctx lookup response)
           :default (throw (ex-info "Freshen responded with non-200 status"
+                                   {:response response})))))))
+
+;; TODO: :ui/mutation? should be a set of currently in flight mutations,
+;; i.e. :ui/in-flight-mutations
+
+(defn- handle-mutation-success
+  [{:keys [conn]} lookup mutation response]
+  (let [{:keys [body]}     response
+        entity       (get body mutation)
+        entity-with-lookup (conj entity lookup)
+        mutating-retraction [:db.fn/retractAttribute lookup :ui/mutating?]]
+    (ds/transact! conn [entity-with-lookup
+                        mutating-retraction])))
+
+(defn mutate!
+  [{:keys [conn remote] :as ctx} lookup mutation args query]
+  (go
+    (when remote
+      (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
+      (let [full-mutation [{`(~mutation ~args) query}]
+            {:keys [status] :as response}
+            (<! (http/post (:path remote) {:edn-params full-mutation}))]
+        (cond
+          (< status 300) (handle-mutation-success ctx lookup mutation response)
+          :default (throw (ex-info "Mutation responded with non-200 status"
                                    {:response response})))))))

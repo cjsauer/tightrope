@@ -28,8 +28,8 @@
   (handler
    {:request-method :post
     :uri "/api"
-    :body (io/input-stream (.getBytes (str [{[:user/handle "Calvin"]
-                                             [:user/greeting]}])))})
+    :body (io/input-stream (.getBytes (str [{`(resolvers/login! {:login/handle "calvin"})
+                                             [:user/me]}])))})
 
   )
 

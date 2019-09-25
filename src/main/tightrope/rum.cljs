@@ -35,6 +35,21 @@
   [conn lookup m]
   (ds/transact! conn [(upsertion lookup m)]))
 
+(defn mutate!
+  [ctx lookup mutation args query]
+  ;; Remote mutation
+  (remote/mutate! ctx lookup mutation args query))
+
+(defn mutate-optimistic!
+  [{:keys [parser conn] :as ctx} lookup mutation args query]
+  ;; Remote mutation
+  (mutate! ctx lookup mutation args query)
+  ;; Optimistic (local) mutation
+  (let [full-mutation [{`(~mutation ~args) query}]
+        local-result (parser {} full-mutation)
+        query-result (get local-result mutation)]
+    (ds/transact! conn [(upsertion lookup query-result)])))
+
 (defn entity->lookup
   [e & ks]
   (loop [k (first ks)]
@@ -167,11 +182,13 @@
                               data            (->> (get parse-result lookup)
                                                    (inject-known-lookups-recursively db))
                               upsert!         (partial upsert! conn lookup)
+                              mutate!         (partial mutate! s lookup)
                               freshen!        (partial remote/freshen! s lookup query)
                               new-props       (cond-> props
                                                 data (assoc ::data data)
                                                 conn (assoc ::conn conn)
                                                 true (assoc ::upsert! upsert!)
+                                                true (assoc ::mutate! mutate!)
                                                 true (assoc ::freshen! freshen!)
                                                 )]
                           (assoc-args state new-props)))
@@ -191,28 +208,31 @@
       (rrf))))
 
 (defn- default-parser
-  [{:keys [resolvers]}]
-  (p/parser
-   {::p/env     {::p/reader               [p/map-reader
-                                           pc/reader2
-                                           pc/open-ident-reader
-                                           p/env-placeholder-reader]
-                 ::p/placeholder-prefixes #{">"}}
-    ::p/mutate  pc/mutate-async
-    ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
-                 p/error-handler-plugin
-                 p/elide-special-outputs-plugin
-                 p/trace-plugin]}))
+  [{:keys [resolvers] :as ctx}]
+  (let [additional-env (dissoc ctx :reslovers)]
+    (p/parser
+     {::p/env     (merge
+                   {::p/reader               [p/map-reader
+                                              pc/reader2
+                                              pc/open-ident-reader
+                                              p/env-placeholder-reader]
+                    ::p/placeholder-prefixes #{">"}}
+                   additional-env)
+      ::p/mutate  pc/mutate
+      ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
+                   p/error-handler-plugin
+                   p/elide-special-outputs-plugin
+                   p/trace-plugin]})))
 
 (defn make-framework-context
-  [{:keys [schema parser resolvers remote]}]
+  [{:keys [schema parser remote] :as ctx}]
   (let [conn     (ds/create-conn schema)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
     {:conn     conn
      :registry registry
      :parser   (or parser
-                   (default-parser {:resolvers resolvers}))
+                   (default-parser ctx))
      :remote   remote
      }))
 
