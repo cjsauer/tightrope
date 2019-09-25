@@ -1,7 +1,6 @@
 (ns splitpea.root
   (:require [rum.core :as rum]
-            [tightrope.client :as rope]
-            [splitpea.resolvers :as resolvers]))
+            [tightrope.client :as rope]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login
@@ -17,7 +16,7 @@
     rum/static
   [{:keys       [login-lookup login-query]
     ::rope/keys [data upsert! mutate!]}]
-  (let [login! #(mutate! login-lookup `resolvers/login! data login-query)]
+  (let [login! #(mutate! login-lookup 'splitpea.server.resolvers/login! data login-query)]
     [:div
      [:input {:type        "text"
               :placeholder "enter a username"

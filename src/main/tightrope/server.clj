@@ -5,6 +5,8 @@
             [compojure.core :as compj :refer [POST]]
             [clojure.edn :as edn]))
 
+;; TODO should use transit+json encoding here for speed
+
 (defn- handler
   [ctx req]
   (let [{:keys [parser]} ctx

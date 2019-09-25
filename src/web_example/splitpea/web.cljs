@@ -6,12 +6,14 @@
             [tightrope.client :as rope]
             [splitpea.model :as model]
             [splitpea.root :as root]
-            [splitpea.resolvers :as resolvers]))
+            [splitpea.resolvers :as shared-resolvers]
+            [splitpea.client.resolvers :as client-resolvers]))
 
 
 (defonce app-ctx (rope/make-framework-context
                   {:schema    model/schema
-                   :resolvers resolvers/main
+                   :resolvers (concat shared-resolvers/all
+                                      client-resolvers/all)
                    :remote    {:path "/api"}}))
 
 (defn ^:dev/after-load mount
