@@ -14,7 +14,10 @@
 (defn try-pull
   [db selector eid]
   (try
-    (ds/pull db selector eid)
+    (let [eid* (if (= :db/id (first eid))
+                 (second eid)
+                 eid)]
+      (ds/pull db selector eid*))
     (catch :default e nil)))
 
 (defn upsert
@@ -38,12 +41,13 @@
 
 (defn eids->lookups
   [db & eids]
-  (ds/q '[:find ?attr ?value
-          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
-          :where
-          [(= ?avalue :db.unique/identity)]
-          [?eids ?attr ?value]]
-        db (:schema db) eids))
+  (into (ds/q '[:find ?attr ?value
+                :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
+                :where
+                [(= ?avalue :db.unique/identity)]
+                [?eids ?attr ?value]]
+              db (:schema db) eids)
+        (map #(vector :db/id %) eids)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Framework code
@@ -158,10 +162,12 @@
                               parse-result    (parser parse-env full-query)
                               data            (->> (get parse-result lookup)
                                                    (inject-known-lookups-recursively db))
+                              upsert!         (partial upsert! conn lookup)
                               freshen!        (partial remote/freshen! s lookup query)
                               new-props       (cond-> props
                                                 data (assoc ::data data)
                                                 conn (assoc ::conn conn)
+                                                true (assoc ::upsert! upsert!)
                                                 true (assoc ::freshen! freshen!)
                                                 )]
                           (assoc-args state new-props)))
