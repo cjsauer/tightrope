@@ -41,7 +41,7 @@
     (when k
       (if (contains? e k)
         [k (get e k)]
-        (recur (next ks))))))
+        (recur (first (next ks)))))))
 
 (defn eids->lookups
   [db & eids]
