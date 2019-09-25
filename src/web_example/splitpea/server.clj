@@ -12,8 +12,14 @@
   {::pc/output #{:server/time}}
   {:server/time (str (java.util.Date.))})
 
+(pc/defresolver me
+  [_ _]
+  {::pc/output #{:user/me}}
+  {:user/self {:user/handle "Calvin"}})
+
 (def server-resolvers (concat resolvers/main
-                              [server-time-resolver]))
+                              [server-time-resolver
+                               me]))
 
 (def handler
   (rope/tightrope-handler {:path "/api"

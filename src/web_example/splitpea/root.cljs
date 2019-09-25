@@ -1,73 +1,73 @@
 (ns splitpea.root
   (:require [rum.core :as rum]
-            [tightrope.rum :as rope]
+            [tightrope.client :as rope]
             [splitpea.resolvers :as resolvers]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; User Dashboard
-
-(def *user-dashboard
-  {:idents   [:user/handle]
-   ;; TODO: :server/time is transacted onto user entity on freshen...
-   ;; Instead of freshen? being a boolean, maybe it could be a keyset
-   :query    [:user/greeting :server/time :ui/freshening?]
-   })
-
-(rum/defc user-dashboard
-  < (rope/ds-mixin *user-dashboard)
-  [{user     ::rope/data
-    freshen! ::rope/freshen!}]
-  (if (:ui/freshening? user)
-    [:div [:p "Loading..."]]
-    [:div
-     [:pre (str user)]
-     [:h1 {:style {:font-size "2em"}} (:user/greeting user)]
-     (when-let [server-time (:server/time user)]
-       [:p server-time])
-     [:button {:on-click freshen!} "Freshen!"]]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login
 
 (def *login
-  {:init-tx {:login/handle ""}
-   :idents  [:db/id]
-   :query   [:login/handle]})
+  {:init-tx       {:login/handle ""}
+   :idents        [:db/id]
+   :query         [:login/handle]
+   :auto-retract? true})
 
 (rum/defc login
   < (rope/ds-mixin *login)
-  [{:keys       [login!]
-    ::rope/keys [data upsert!]}]
-  [:div
-   [:input {:type        "text"
-            :placeholder "enter a username"
-            :value       (or (:login/handle data) "")
-            :on-change   #(upsert! {:login/handle (-> % .-target .-value)})}]
-   [:button {:on-click (partial login! data)} "Login!"]
-   [:pre (str data)]])
+    rum/static
+  [{:keys       [login-lookup login-query]
+    ::rope/keys [data upsert! mutate!]}]
+  (let [login! #(mutate! login-lookup `resolvers/login! data login-query)]
+    [:div
+     [:input {:type        "text"
+              :placeholder "enter a username"
+              :value       (or (:login/handle data) "")
+              :on-change   #(upsert! {:login/handle (-> % .-target .-value)})}]
+     [:button {:on-click login!} "Login!"]
+     [:pre (str data)]]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; User Dashboard
+
+(def *user-card
+  {:idents [:user/handle]
+   :query  [:user/handle :user/greeting]})
+
+(rum/defc user-card
+  < (rope/ds-mixin *user-card)
+    rum/static
+  [{::rope/keys [data]}]
+  (let [{:user/keys [greeting]} data]
+    [:div
+     [:h1 greeting]
+     [:pre (str data)]]))
+
+(def *user-dashboard
+  {:mount-tx [{:db/ident   :me
+               :form/login (:init-tx *login)}]
+   :lookup   [:db/ident :me]
+   :query    [:form/login {:user/me (:query *user-card)}]
+   })
+
+(rum/defc user-dashboard
+  < (rope/ds-mixin *user-dashboard)
+    rum/static
+  [{::rope/keys [data]}]
+  (if-let [user (:user/me data)]
+    (user-card user)
+    (login (merge
+            (:form/login data)
+            {:login-lookup (:lookup *user-dashboard)
+             :login-query  (:query *user-dashboard)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Root
 
-(def *root
-  {:init-tx {:db/ident   :root
-             :user/login (:init-tx *login)}
-   :lookup  [:db/ident :root]
-   :query   [:user/me :user/login :ui/mutating?]})
-
 (rum/defc root
-  < (rope/ds-mixin *root)
-  [{::rope/keys [data mutate!]}]
-  (let [me        (:user/me data)
-        login!    #(mutate! `resolvers/login! % [:user/me])
-        mutating? (:ui/mutating? data)]
-    [:div
-     {:style {:height          "100%"
-              :flex-direction  "column"
-              :justify-content "space-between"}}
-     [:pre (str data)]
-     (cond
-       mutating?  [:p "Logging in..."]
-       (nil? me)  (login (merge {:login! login!}
-                                (:user/login data)))
-       (some? me) (user-dashboard me))]))
+  < rum/static
+  []
+  [:div
+   {:style {:height          "100%"
+            :flex-direction  "column"
+            :justify-content "space-between"}}
+   (user-dashboard)])

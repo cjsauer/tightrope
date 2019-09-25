@@ -15,38 +15,36 @@
 ;; TODO: rapid calls to freshen! should be batched into a single query
 (defn freshen!
   [{:keys [remote conn] :as ctx} lookup query]
+  (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
   (go
-    (when remote
-      (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
-      (let [full-query [{lookup query}]
-            {:keys [status] :as response}
-            (<! (http/post (:path remote) {:edn-params full-query}))]
-        (cond
-          (< status 300) (handle-freshen-success ctx lookup response)
-          :default (throw (ex-info "Freshen responded with non-200 status"
-                                   {:response response})))))))
+    (let [full-query [{lookup query}]
+          {:keys [status] :as response}
+          (<! (http/post (:path remote) {:edn-params full-query}))]
+      (cond
+        (< status 300) (handle-freshen-success ctx lookup response)
+        :default (throw (ex-info "Freshen responded with non-200 status"
+                                 {:response response}))))))
 
 ;; TODO: :ui/mutation? should be a set of currently in flight mutations,
 ;; i.e. :ui/in-flight-mutations
 
 (defn- handle-mutation-success
   [{:keys [conn]} lookup mutation response]
-  (let [{:keys [body]}     response
-        entity       (get body mutation)
-        entity-with-lookup (conj entity lookup)
+  (let [{:keys [body]}      response
+        entity              (get body mutation)
+        entity-with-lookup  (conj entity lookup)
         mutating-retraction [:db.fn/retractAttribute lookup :ui/mutating?]]
     (ds/transact! conn [entity-with-lookup
                         mutating-retraction])))
 
 (defn mutate!
   [{:keys [conn remote] :as ctx} lookup mutation args query]
+  (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
   (go
-    (when remote
-      (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
-      (let [full-mutation [{`(~mutation ~args) query}]
-            {:keys [status] :as response}
-            (<! (http/post (:path remote) {:edn-params full-mutation}))]
-        (cond
-          (< status 300) (handle-mutation-success ctx lookup mutation response)
-          :default (throw (ex-info "Mutation responded with non-200 status"
-                                   {:response response})))))))
+    (let [full-mutation [{`(~mutation ~args) query}]
+          {:keys [status] :as response}
+          (<! (http/post (:path remote) {:edn-params full-mutation}))]
+      (cond
+        (< status 300) (handle-mutation-success ctx lookup mutation response)
+        :default (throw (ex-info "Mutation responded with non-200 status"
+                                 {:response response}))))))

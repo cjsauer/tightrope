@@ -1,4 +1,4 @@
-(ns tightrope.rum
+(ns tightrope.client
   "Mount datascript entities to the UI"
   (:require ["react" :as react]
             [rum.core :as rum]
@@ -10,17 +10,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
-;;
-;; TODO: many of these are completely agnostic to UI lib (e.g. Rum),
-;; and should be moved out into a core ns (likely separate clj and cljs files,
-;; as many depend on a specific db implementation)
+
+(defn- normalize-lookup
+  [lookup]
+  (if (= :db/id (first lookup))
+    (second lookup)
+    lookup))
 
 (defn try-pull
   [db selector eid]
   (try
-    (let [eid* (if (= :db/id (first eid))
-                 (second eid)
-                 eid)]
+    (let [eid* (normalize-lookup eid)]
       (ds/pull db selector eid*))
     (catch :default e nil)))
 
@@ -47,8 +47,8 @@
   ;; Optimistic (local) mutation
   (let [full-mutation [{`(~mutation ~args) query}]
         local-result (parser {} full-mutation)
-        query-result (get local-result mutation)]
-    (ds/transact! conn [(upsertion lookup query-result)])))
+        mutation-result (get local-result mutation)]
+    (ds/transact! conn [(upsertion lookup mutation-result)])))
 
 (defn entity->lookup
   [e & ks]
@@ -111,31 +111,22 @@
         derived-lookup {:lookup (derive-lookup props opts)}]
     (merge ctx opts derived-lookup {:props props})))
 
-(defn- assoc-args
-  [state props]
-  (assoc state :rum/args [props]))
-
-(defn- inject-known-lookups
-  [db e]
-  (if-let [eid (:db/id e)]
-    (let [lookups (eids->lookups db eid)]
-      (into e lookups))
-    e))
-
-(defn- inject-known-lookups-recursively
-  [db e]
-  (let [f (fn [new-e [k v]]
-            (if (map? v)
-              (->> (inject-known-lookups db v)
-                   (inject-known-lookups-recursively db)
-                   (assoc new-e k))
-              (assoc new-e k v)))]
-   (reduce f {} e)))
+(defn- component-query
+  [{:keys [conn parser lookup query]}]
+  (when (and lookup query)
+    (let [db              (ds/db conn)
+          pull-result     (try-pull db query lookup)
+          full-query      [{lookup query}]
+          parse-env       (cond-> {}
+                            pull-result (assoc ::p/entity {lookup pull-result}))
+          parse-result    (parser parse-env full-query)
+          data            (get parse-result lookup)]
+      data)))
 
 (def ^:private TightropeContext (react/createContext))
 
 (defn ds-mixin
-  [& [{:keys [mount-tx unmount-tx freshen?]
+  [& [{:keys [mount-tx unmount-tx freshen? auto-retract?]
        :as   opts}]]
   {:static-properties {:contextType TightropeContext}
    ;; -------------------------------------------------------------------------------
@@ -154,18 +145,20 @@
                                 (assoc state :rerender-fn rerender-fn))
                             state)))
    ;; -------------------------------------------------------------------------------
-   :did-unmount       (fn did-unmount [state]
-                        (let [{:keys [conn
-                                      registry
-                                      lookup]} (parse-state state opts )
-                              fn-to-remove     (:rerender-fn state)]
-                          (when unmount-tx
-                            (ds/transact! conn unmount-tx))
-                          (if (and lookup fn-to-remove)
-                            (do
-                              (swap! registry remove-fn-from-registry lookup fn-to-remove)
-                              (dissoc state :rerender-fn))
-                            state)))
+   :will-unmount       (fn will-unmount [state]
+                         (let [{:keys [conn
+                                       registry
+                                       lookup]} (parse-state state opts )
+                               fn-to-remove     (:rerender-fn state)]
+                           (when unmount-tx
+                             (ds/transact! conn unmount-tx))
+                           (when (and auto-retract? lookup)
+                             (ds/transact! conn [[:db/retractEntity (normalize-lookup lookup)]]))
+                           (if (and lookup fn-to-remove)
+                             (do
+                               (swap! registry remove-fn-from-registry lookup fn-to-remove)
+                               (dissoc state :rerender-fn))
+                             state)))
    ;; -------------------------------------------------------------------------------
    :before-render     (fn before-render [state]
                         (let [{:keys [conn
@@ -173,29 +166,18 @@
                                       lookup
                                       query
                                       props] :as s} (parse-state state opts)
-                              db              (ds/db conn)
-                              pull-result     (try-pull db query lookup)
-                              full-query      [{lookup query}]
-                              parse-env       (cond-> {:conn conn}
-                                                pull-result (assoc ::p/entity {lookup pull-result}))
-                              parse-result    (parser parse-env full-query)
-                              data            (->> (get parse-result lookup)
-                                                   (inject-known-lookups-recursively db))
-                              upsert!         (partial upsert! conn lookup)
-                              mutate!         (partial mutate! s lookup)
-                              freshen!        (partial remote/freshen! s lookup query)
-                              new-props       (cond-> props
-                                                data (assoc ::data data)
-                                                conn (assoc ::conn conn)
-                                                true (assoc ::upsert! upsert!)
-                                                true (assoc ::mutate! mutate!)
-                                                true (assoc ::freshen! freshen!)
-                                                )]
-                          (assoc-args state new-props)))
+                              data       (component-query s)
+                              upsert!    (partial upsert! conn lookup)
+                              mutate!    (partial mutate! s)
+                              freshen!   (partial remote/freshen! s lookup query)
+                              new-props  (cond-> props
+                                           data   (assoc ::data data)
+                                           lookup (assoc ::upsert! upsert!)
+                                           lookup (assoc ::mutate! mutate!)
+                                           lookup (assoc ::freshen! freshen!)
+                                           )]
+                          (assoc state :rum/args [new-props])))
    })
-
-;; TODO: everything below this point is also agnostic to the UI lib (e.g. Rum)
-;; and should be moved out into core.
 
 (defn on-tx
   [registry {:keys [db-after tx-data]}]
@@ -241,7 +223,3 @@
   (let [provider      (.-Provider TightropeContext)
         props         (clj->js {:value ctx})]
     (apply react/createElement provider props children)))
-
-(defn reset-registry!
-  [ctx]
-  (reset! (:registry ctx) {}))

@@ -3,7 +3,7 @@
   (:require-macros [cljs.core.async.macros :refer [go]])
   (:require [rum.core :as rum]
             [datascript.core :as ds]
-            [tightrope.rum :as rope]
+            [tightrope.client :as rope]
             [splitpea.model :as model]
             [splitpea.root :as root]
             [splitpea.resolvers :as resolvers]))
@@ -16,12 +16,10 @@
 
 (defn ^:dev/after-load mount
   []
-  (rope/reset-registry! app-ctx)
   (rum/mount
    (rope/ctx-provider app-ctx (root/root))
    (.getElementById js/document "app")))
 
 (defn start!
   []
-  (ds/transact! (:conn app-ctx) [(:init-tx root/*root)])
   (mount))
