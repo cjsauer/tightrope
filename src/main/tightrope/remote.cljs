@@ -12,6 +12,7 @@
     (ds/transact! conn [entity-with-lookup
                         freshen-retraction])))
 
+;; TODO: rapid calls to freshen! should be batched into a single query
 (defn freshen!
   [{:keys [remote conn] :as ctx} lookup query]
   (go

@@ -10,6 +10,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
+;;
+;; TODO: many of these are completely agnostic to UI lib (e.g. Rum),
+;; and should be moved out into a core ns (likely separate clj and cljs files,
+;; as many depend on a specific db implementation)
 
 (defn try-pull
   [db selector eid]
@@ -20,7 +24,7 @@
       (ds/pull db selector eid*))
     (catch :default e nil)))
 
-(defn upsert
+(defn upsertion
   [lookup m]
   (let [lookup-map (if (vector? lookup)
                      (apply hash-map lookup)
@@ -29,7 +33,7 @@
 
 (defn upsert!
   [conn lookup m]
-  (ds/transact! conn [(upsert lookup m)]))
+  (ds/transact! conn [(upsertion lookup m)]))
 
 (defn entity->lookup
   [e & ks]
@@ -172,6 +176,9 @@
                                                 )]
                           (assoc-args state new-props)))
    })
+
+;; TODO: everything below this point is also agnostic to the UI lib (e.g. Rum)
+;; and should be moved out into core.
 
 (defn on-tx
   [registry {:keys [db-after tx-data]}]
