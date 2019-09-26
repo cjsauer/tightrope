@@ -8,7 +8,7 @@
   (rope/tightrope-handler
    {:parser-opts {:resolvers (concat shared-resolvers/all
                                      server-resolvers/all)}
-    :remote      {:path "/api"}
+    :path "/api"
     }))
 
 
