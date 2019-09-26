@@ -14,7 +14,6 @@
 
 (rum/defc login-form
   < (rope/ds-mixin *login-form)
-    rum/static
   [{::rope/keys [data upsert! mutate!]}]
   (let [login! #(mutate! 'splitpea.server.resolvers/login! data)]
     [:div
@@ -34,7 +33,6 @@
 
 (rum/defc user-card
   < (rope/ds-mixin *user-card)
-    rum/static
   [{::rope/keys [data]}]
   [:div
    [:h1 (:user/greeting data)]
@@ -48,7 +46,6 @@
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
-  rum/static
   [{::rope/keys [data]}]
   (when-not (:ui/freshening? data)
     (if-let [user (:user/me data)]
@@ -59,7 +56,6 @@
 ;; Root
 
 (rum/defc root
-  < rum/static
   []
   [:div
    (user-dashboard)])
