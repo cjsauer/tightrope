@@ -14,15 +14,14 @@
 
 (def *user-dashboard
   {:idents [:user/handle]
-   :query  [:user/greeting]
-   :freshen? true
+   :query  [:user/handle :user/greeting]
    })
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
-  [user]
+  [{user ::rope/data}]
   [:div
-   [:pre (str user)]
+   [:pre (str "USER_DASH" user)]
    (friendly-greeting {:greeting (:user/greeting user)})])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -37,32 +36,37 @@
 
 (rum/defc login-form
   < (rope/ds-mixin *login-form)
-  [{:login/keys [handle]
-    ::rope/keys [upsert! mutate!] :as data}]
-  (let [login! #(mutate! 'splitpea.server.resolvers/login!
-                         (select-keys data [:login/handle]))]
+  [{::rope/keys [data upsert! mutate!]}]
+  (let [{:login/keys [handle]} data
+        login!                 #(mutate! 'splitpea.server.resolvers/login!
+                                         (select-keys data [:login/handle]))]
     [:div
      [:input {:type        "text"
               :placeholder "enter a username"
               :value       (or handle "")
-              :on-change   #(upsert! {:login/handle (-> % .-target .-value)})}]
+              :on-change   #(upsert!
+                             {:login/handle (-> % .-target .-value)})}]
      [:button {:on-click login!} "Login!"]
-     [:pre (str data)]]))
+     [:pre (str "LOGIN " data)]]))
 
 (def *authn
   {:mount-tx [{:db/ident :me}]
    :lookup   [:db/ident :me]
-   :query    [:user/me]
+   :query    [{:user/me (:query *user-dashboard)} :ui/freshening?]
+   :freshen? true
    })
 
 (rum/defc authn
   < (rope/ds-mixin *authn)
-  [{:user/keys [me]}]
-  [:div
-   #_[:pre (str data)]
-   (if me
-    (user-dashboard me)
-    (login-form))])
+  [{::rope/keys [data]}]
+  (let [{:user/keys [me]
+         :ui/keys   [freshening?]} data]
+    (when-not freshening?
+      [:div
+       [:pre (str "AUTHN " data)]
+       (if me
+         (user-dashboard me)
+         (login-form))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Root

@@ -53,13 +53,12 @@
 
 (defn eids->lookups
   [db & eids]
-  (into (ds/q '[:find ?attr ?value
-                :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
-                :where
-                [(= ?avalue :db.unique/identity)]
-                [?eids ?attr ?value]]
-              db (:schema db) eids)
-        (map #(vector :db/id %) eids)))
+  (ds/q '[:find ?attr ?value
+          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
+          :where
+          [(= ?avalue :db.unique/identity)]
+          [?eids ?attr ?value]]
+        db (:schema db) eids))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Registry
@@ -158,10 +157,10 @@
                               rerender-fn #(rum/request-render react-component)]
                           (when mount-tx
                             (ds/transact! conn mount-tx))
-                          (when (and freshen? lookup query)
-                            (remote/freshen! s lookup query))
                           (if lookup
                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
+                                (when (and freshen? lookup query)
+                                  (remote/freshen! s lookup query))
                                 (assoc state :rerender-fn rerender-fn))
                             state)))
    ;; -------------------------------------------------------------------------------
@@ -191,7 +190,7 @@
                               mutate!    (partial mutate! s)
                               freshen!   (partial remote/freshen! s lookup query)
                               new-props  (cond-> props
-                                           data   (merge data)
+                                           data   (assoc ::data data)
                                            lookup (assoc ::upsert! upsert!)
                                            lookup (assoc ::mutate! mutate!)
                                            lookup (assoc ::freshen! freshen!)
@@ -205,8 +204,7 @@
 (defn on-tx
   [registry {:keys [db-after tx-data]}]
   (let [affected-eids    (map :e tx-data)
-        affected-lookups (concat (apply eids->lookups db-after affected-eids)
-                                 affected-eids)
+        affected-lookups (apply eids->lookups db-after affected-eids)
         rerender-fns     (mapcat #(get @registry %)
                                  (set affected-lookups))]
     (doseq [rrf rerender-fns]
