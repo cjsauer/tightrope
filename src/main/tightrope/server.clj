@@ -3,18 +3,16 @@
             [com.wsscode.pathom.connect :as pc]
             [clojure.core.async :as a :refer [<!!]]
             [compojure.core :as compj :refer [POST]]
-            [clojure.edn :as edn]))
-
-;; TODO should use transit+json encoding here for speed
+            [clojure.edn :as edn]
+            [muuntaja.middleware :as mja]))
 
 (defn- handler
   [ctx req]
   (let [{:keys [parser]} ctx
-        query            (-> req :body slurp edn/read-string)
+        query            (:body-params req)
         parse-result     (<!! (parser {:request req} query))]
     {:status  200
-     :headers {"Content-Type" "application/edn"}
-     :body    (str parse-result)}))
+     :body    parse-result}))
 
 (defn- default-parser
   [{:keys [env resolvers]}]
@@ -36,6 +34,8 @@
   [{:keys [path parser-opts] :as handler-opts}]
   (let [parser (or (:parser handler-opts)
                    (default-parser parser-opts))
-        ctx    {:parser parser}]
-    (compj/routes
-     (POST path [] (partial handler ctx)))))
+        ctx    {:parser parser}
+        routes (compj/routes
+                (POST path [] (partial handler ctx)))]
+    (-> routes
+        mja/wrap-format)))

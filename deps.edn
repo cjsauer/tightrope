@@ -2,7 +2,8 @@
  :deps  {compojure              {:mvn/version "1.6.1"}
          com.wsscode/pathom     {:mvn/version "2.2.25"}
          org.clojure/core.async {:mvn/version "0.4.500"}
-         cljs-http              {:mvn/version "0.1.46"}}
+         cljs-http              {:mvn/version "0.1.46"}
+         metosin/muuntaja       {:mvn/version "0.6.4"}}
 
  :aliases
  {:v1.10.1     {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}

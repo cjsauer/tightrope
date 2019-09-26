@@ -8,7 +8,8 @@
   (go
     (let [req-middleware-fn  (get remote :request-middleware (fn [_ r] r))
           resp-middleware-fn (get remote :response-middleware (fn [_ r] r))
-          full-req           (req-middleware-fn ctx req)
+          mw-req             (req-middleware-fn ctx req)
+          full-req           (update mw-req :headers merge {"Accept" "application/transit+json"})
           resp               (<! (http/post (:uri remote) full-req))]
       (resp-middleware-fn ctx resp))))
 
@@ -27,7 +28,7 @@
   (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
   (go
     (let [full-query       [{lookup query}]
-          req              {:edn-params full-query}
+          req              {:transit-params full-query}
           {:keys [status]
            :as   response} (<! (post! ctx req))]
       (cond
@@ -52,7 +53,7 @@
   (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
   (go
     (let [full-mutation    [{`(~mutation ~args) query}]
-          req              {:edn-params full-mutation}
+          req              {:transit-params full-mutation}
           {:keys [status]
            :as   response} (<! (post! ctx req))]
       (cond
