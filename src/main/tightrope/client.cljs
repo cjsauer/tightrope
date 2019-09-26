@@ -11,17 +11,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
 
-(defn- normalize-lookup
-  [lookup]
-  (if (= :db/id (first lookup))
-    (second lookup)
-    lookup))
-
 (defn try-pull
   [db selector eid]
   (try
-    (let [eid* (normalize-lookup eid)]
-      (ds/pull db selector eid*))
+    (ds/pull db selector eid)
     (catch :default e nil)))
 
 (defn upsertion
@@ -69,7 +62,10 @@
         (map #(vector :db/id %) eids)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Framework code
+;; Registry
+;;   - Map of lookup -> function
+;;   - Functions are presumably re-render functions to reactively
+;;     update UI following datascript transactions
 
 (defn- add-fn-to-registry
   [registry lookup f]
@@ -82,6 +78,9 @@
     (if (empty? new-rerender-fns)
       (dissoc registry lookup)
       (assoc registry lookup new-rerender-fns))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rum-specifics / React Lifecycle
 
 (defn- get-ctx
   [{:rum/keys [react-component]}]
@@ -117,7 +116,7 @@
     (let [db              (ds/db conn)
           pull-result     (try-pull db query lookup)
           full-query      [{lookup query}]
-          parse-env       (cond-> {}
+          parse-env       (cond-> {:conn conn}
                             pull-result (assoc ::p/entity {lookup pull-result}))
           parse-result    (parser parse-env full-query)
           data            (get parse-result lookup)]
@@ -153,7 +152,7 @@
                            (when unmount-tx
                              (ds/transact! conn unmount-tx))
                            (when (and auto-retract? lookup)
-                             (ds/transact! conn [[:db/retractEntity (normalize-lookup lookup)]]))
+                             (ds/transact! conn [[:db/retractEntity lookup]]))
                            (if (and lookup fn-to-remove)
                              (do
                                (swap! registry remove-fn-from-registry lookup fn-to-remove)
@@ -178,6 +177,9 @@
                                            )]
                           (assoc state :rum/args [new-props])))
    })
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Framework context/state
 
 (defn on-tx
   [registry {:keys [db-after tx-data]}]
@@ -206,9 +208,17 @@
                    p/elide-special-outputs-plugin
                    p/trace-plugin]})))
 
+(defn ropeid
+  []
+  (str (random-uuid)))
+
+(defn- enrich-schema
+  [schema]
+  (assoc schema ::id {:db/unique :db.unique/identity}))
+
 (defn make-framework-context
   [{:keys [schema parser remote] :as ctx}]
-  (let [conn     (ds/create-conn schema)
+  (let [conn     (-> schema enrich-schema ds/create-conn)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
     {:conn     conn

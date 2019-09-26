@@ -6,9 +6,10 @@
 ;; Login
 
 (def *login
-  {:init-tx       {:login/handle ""}
-   :idents        [:db/id]
-   :query         [:login/handle]
+  {:init-tx       {::rope/id (rope/ropeid)
+                   :login/handle ""}
+   :idents        [::rope/id]
+   :query         [::rope/id :login/handle]
    :auto-retract? true})
 
 (rum/defc login
@@ -36,28 +37,31 @@
   < (rope/ds-mixin *user-card)
     rum/static
   [{::rope/keys [data]}]
-  (let [{:user/keys [greeting]} data]
-    [:div
-     [:h1 greeting]
-     [:pre (str data)]]))
+  [:div
+   [:h1 (:user/greeting data)]
+   [:pre (str data)]])
 
 (def *user-dashboard
   {:mount-tx [{:db/ident   :me
                :form/login (:init-tx *login)}]
    :lookup   [:db/ident :me]
-   :query    [:form/login {:user/me (:query *user-card)}]
+   :query    [{:user/me (:query *user-card)}
+              {:form/login (:query *login)}
+              :ui/freshening?]
+   ;; :freshen? true
    })
 
 (rum/defc user-dashboard
   < (rope/ds-mixin *user-dashboard)
-    rum/static
+  rum/static
   [{::rope/keys [data]}]
-  (if-let [user (:user/me data)]
-    (user-card user)
-    (login (merge
-            (:form/login data)
-            {:login-lookup (:lookup *user-dashboard)
-             :login-query  (:query *user-dashboard)}))))
+  (when-not (:ui/freshening? data)
+    (if-let [user (:user/me data)]
+      (user-card user)
+      (login (merge
+              (:form/login data)
+              {:login-lookup (:lookup *user-dashboard)
+               :login-query  (:query *user-dashboard)})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Root
@@ -66,7 +70,4 @@
   < rum/static
   []
   [:div
-   {:style {:height          "100%"
-            :flex-direction  "column"
-            :justify-content "space-between"}}
    (user-dashboard)])
