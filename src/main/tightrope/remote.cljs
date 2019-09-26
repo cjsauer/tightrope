@@ -17,13 +17,15 @@
   [{:keys [remote conn] :as ctx} lookup query]
   (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
   (go
-    (let [full-query [{lookup query}]
+    (let [full-query  [{lookup query}]
+          req         {:edn-params full-query}
+          wrapped-req ((:request-middleware remote) ctx req)
           {:keys [status] :as response}
-          (<! (http/post (:path remote) {:edn-params full-query}))]
+          (<! (http/post (:path remote) wrapped-req))]
       (cond
         (< status 300) (handle-freshen-success ctx lookup response)
-        :default (throw (ex-info "Freshen responded with non-200 status"
-                                 {:response response}))))))
+        :default       (throw (ex-info "Freshen responded with non-200 status"
+                                       {:response response}))))))
 
 ;; TODO: :ui/mutation? should be a set of currently in flight mutations,
 ;; i.e. :ui/in-flight-mutations
@@ -42,9 +44,11 @@
   (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
   (go
     (let [full-mutation [{`(~mutation ~args) query}]
+          req           {:edn-params full-mutation}
+          wrapped-req   ((:request-middleware remote) ctx req)
           {:keys [status] :as response}
-          (<! (http/post (:path remote) {:edn-params full-mutation}))]
+          (<! (http/post (:path remote) wrapped-req))]
       (cond
         (< status 300) (handle-mutation-success ctx mutation response)
-        :default (throw (ex-info "Mutation responded with non-200 status"
-                                 {:response response}))))))
+        :default       (throw (ex-info "Mutation responded with non-200 status"
+                                       {:response response}))))))

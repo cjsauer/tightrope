@@ -9,12 +9,18 @@
             [splitpea.resolvers :as shared-resolvers]
             [splitpea.client.resolvers :as client-resolvers]))
 
+(defn- authz-middleware
+  [{:keys [parser]} req]
+  (if-let [token (-> (parser {} [:user/token]) :user/token)]
+    (update req :headers merge {"Authorization" token})
+    req))
 
 (defonce app-ctx (rope/make-framework-context
                   {:schema    model/schema
                    :resolvers (concat shared-resolvers/all
                                       client-resolvers/all)
-                   :remote    {:path "/api"}}))
+                   :remote    {:path "/api"
+                               :request-middleware authz-middleware}}))
 
 (defn ^:dev/after-load mount
   []
