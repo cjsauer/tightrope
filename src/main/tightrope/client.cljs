@@ -191,7 +191,7 @@
                               mutate!    (partial mutate! s)
                               freshen!   (partial remote/freshen! s lookup query)
                               new-props  (cond-> props
-                                           data   (assoc ::data data)
+                                           data   (merge data)
                                            lookup (assoc ::upsert! upsert!)
                                            lookup (assoc ::mutate! mutate!)
                                            lookup (assoc ::freshen! freshen!)

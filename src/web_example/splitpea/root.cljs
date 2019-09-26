@@ -3,7 +3,30 @@
             [tightrope.client :as rope]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Login
+;; User Dashboard
+
+;; Example of pure component
+(rum/defc friendly-greeting
+  < rum/static
+  [{:keys [greeting]}]
+  [:div
+   [:h1 {:style {:font-size "2em"}} greeting]])
+
+(def *user-dashboard
+  {:idents [:user/handle]
+   :query  [:user/greeting]
+   :freshen? true
+   })
+
+(rum/defc user-dashboard
+  < (rope/ds-mixin *user-dashboard)
+  [user]
+  [:div
+   [:pre (str user)]
+   (friendly-greeting {:greeting (:user/greeting user)})])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Authentication
 
 (def *login-form
   {:mount-tx [{:db/ident :me
@@ -14,43 +37,32 @@
 
 (rum/defc login-form
   < (rope/ds-mixin *login-form)
-  [{::rope/keys [data upsert! mutate!]}]
-  (let [login! #(mutate! 'splitpea.server.resolvers/login! data)]
+  [{:login/keys [handle]
+    ::rope/keys [upsert! mutate!] :as data}]
+  (let [login! #(mutate! 'splitpea.server.resolvers/login!
+                         (select-keys data [:login/handle]))]
     [:div
      [:input {:type        "text"
               :placeholder "enter a username"
-              :value       (or (:login/handle data) "")
+              :value       (or handle "")
               :on-change   #(upsert! {:login/handle (-> % .-target .-value)})}]
      [:button {:on-click login!} "Login!"]
      [:pre (str data)]]))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; User Dashboard
-
-(def *user-card
-  {:idents [:user/handle]
-   :query  [:user/handle :user/greeting]})
-
-(rum/defc user-card
-  < (rope/ds-mixin *user-card)
-  [{::rope/keys [data]}]
-  [:div
-   [:h1 (:user/greeting data)]
-   [:pre (str data)]])
-
-(def *user-dashboard
+(def *authn
   {:mount-tx [{:db/ident :me}]
    :lookup   [:db/ident :me]
-   :query    [:user/me :ui/freshening?]
+   :query    [:user/me]
    })
 
-(rum/defc user-dashboard
-  < (rope/ds-mixin *user-dashboard)
-  [{::rope/keys [data]}]
-  (when-not (:ui/freshening? data)
-    (if-let [user (:user/me data)]
-      (user-card user)
-      (login-form))))
+(rum/defc authn
+  < (rope/ds-mixin *authn)
+  [{:user/keys [me]}]
+  [:div
+   #_[:pre (str data)]
+   (if me
+    (user-dashboard me)
+    (login-form))])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Root
@@ -58,4 +70,4 @@
 (rum/defc root
   []
   [:div
-   (user-dashboard)])
+   (authn)])
