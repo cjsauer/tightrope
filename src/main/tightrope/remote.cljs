@@ -3,6 +3,13 @@
             [cljs.core.async :as a :refer [go <!]]
             [datascript.core :as ds]))
 
+(defn- post!
+  [{:keys [remote] :as ctx} req]
+  (go
+    (let [middleware-fn (get remote :request-middleware (fn [_ r] r))
+          full-req      (middleware-fn ctx req)]
+      (<! (http/post (:uri remote) full-req)))))
+
 (defn- handle-freshen-success
   [{:keys [conn]} lookup response]
   (let [{:keys [body]}     response
@@ -14,14 +21,13 @@
 
 ;; TODO: rapid calls to freshen! should be batched into a single query
 (defn freshen!
-  [{:keys [remote conn] :as ctx} lookup query]
+  [{:keys [conn] :as ctx} lookup query]
   (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
   (go
-    (let [full-query  [{lookup query}]
-          req         {:edn-params full-query}
-          wrapped-req ((:request-middleware remote) ctx req)
-          {:keys [status] :as response}
-          (<! (http/post (:uri remote) wrapped-req))]
+    (let [full-query       [{lookup query}]
+          req              {:edn-params full-query}
+          {:keys [status]
+           :as   response} (<! (post! ctx req))]
       (cond
         (< status 300) (handle-freshen-success ctx lookup response)
         :default       (throw (ex-info "Freshen responded with non-200 status"
@@ -40,14 +46,13 @@
                         mutating-retraction])))
 
 (defn mutate!
-  [{:keys [conn remote lookup query] :as ctx} mutation args]
+  [{:keys [conn lookup query] :as ctx} mutation args]
   (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
   (go
-    (let [full-mutation [{`(~mutation ~args) query}]
-          req           {:edn-params full-mutation}
-          wrapped-req   ((:request-middleware remote) ctx req)
-          {:keys [status] :as response}
-          (<! (http/post (:uri remote) wrapped-req))]
+    (let [full-mutation    [{`(~mutation ~args) query}]
+          req              {:edn-params full-mutation}
+          {:keys [status]
+           :as   response} (<! (post! ctx req))]
       (cond
         (< status 300) (handle-mutation-success ctx mutation response)
         :default       (throw (ex-info "Mutation responded with non-200 status"
