@@ -29,7 +29,7 @@
 ;; i.e. :ui/in-flight-mutations
 
 (defn- handle-mutation-success
-  [{:keys [conn]} lookup mutation response]
+  [{:keys [conn lookup]} mutation response]
   (let [{:keys [body]}      response
         entity              (get body mutation)
         entity-with-lookup  (conj entity lookup)
@@ -38,13 +38,13 @@
                         mutating-retraction])))
 
 (defn mutate!
-  [{:keys [conn remote] :as ctx} lookup mutation args query]
+  [{:keys [conn remote lookup query] :as ctx} mutation args]
   (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
   (go
     (let [full-mutation [{`(~mutation ~args) query}]
           {:keys [status] :as response}
           (<! (http/post (:path remote) {:edn-params full-mutation}))]
       (cond
-        (< status 300) (handle-mutation-success ctx lookup mutation response)
+        (< status 300) (handle-mutation-success ctx mutation response)
         :default (throw (ex-info "Mutation responded with non-200 status"
                                  {:response response}))))))

@@ -5,19 +5,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Login
 
-(def *login
-  {:init-tx       {::rope/id (rope/ropeid)
-                   :login/handle ""}
-   :idents        [::rope/id]
-   :query         [::rope/id :login/handle]
-   :auto-retract? true})
+(def *login-form
+  {:mount-tx [{:db/ident :me
+               :login/handle ""}]
+   :lookup   [:db/ident :me]
+   :query    [:user/me :login/handle]
+   })
 
-(rum/defc login
-  < (rope/ds-mixin *login)
+(rum/defc login-form
+  < (rope/ds-mixin *login-form)
     rum/static
-  [{:keys       [login-lookup login-query]
-    ::rope/keys [data upsert! mutate!]}]
-  (let [login! #(mutate! login-lookup 'splitpea.server.resolvers/login! data login-query)]
+  [{::rope/keys [data upsert! mutate!]}]
+  (let [login! #(mutate! 'splitpea.server.resolvers/login! data)]
     [:div
      [:input {:type        "text"
               :placeholder "enter a username"
@@ -42,13 +41,9 @@
    [:pre (str data)]])
 
 (def *user-dashboard
-  {:mount-tx [{:db/ident   :me
-               :form/login (:init-tx *login)}]
+  {:mount-tx [{:db/ident :me}]
    :lookup   [:db/ident :me]
-   :query    [{:user/me (:query *user-card)}
-              {:form/login (:query *login)}
-              :ui/freshening?]
-   ;; :freshen? true
+   :query    [:user/me :ui/freshening?]
    })
 
 (rum/defc user-dashboard
@@ -58,10 +53,7 @@
   (when-not (:ui/freshening? data)
     (if-let [user (:user/me data)]
       (user-card user)
-      (login (merge
-              (:form/login data)
-              {:login-lookup (:lookup *user-dashboard)
-               :login-query  (:query *user-dashboard)})))))
+      (login-form))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Root

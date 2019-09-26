@@ -29,14 +29,14 @@
   (ds/transact! conn [(upsertion lookup m)]))
 
 (defn mutate!
-  [ctx lookup mutation args query]
-  ;; Remote mutation
-  (remote/mutate! ctx lookup mutation args query))
+  [ctx mutation args]
+  ;; Remote mutation only
+  (remote/mutate! ctx mutation args))
 
 (defn mutate-optimistic!
-  [{:keys [parser conn] :as ctx} lookup mutation args query]
+  [{:keys [parser conn lookup query] :as ctx} mutation args]
   ;; Remote mutation
-  (mutate! ctx lookup mutation args query)
+  (mutate! ctx mutation args)
   ;; Optimistic (local) mutation
   (let [full-mutation [{`(~mutation ~args) query}]
         local-result (parser {} full-mutation)
@@ -90,7 +90,7 @@
 
 (defn- get-props
   [state]
-  (-> state :rum/args first))
+  (or (-> state :rum/args first) {}))
 
 (defn- props-or-opts
   [props opts k]
@@ -110,6 +110,23 @@
         derived-lookup {:lookup (derive-lookup props opts)}]
     (merge ctx opts derived-lookup {:props props})))
 
+(defn- inject-known-lookups
+  [db e]
+  (if-let [eid (:db/id e)]
+    (let [lookups (eids->lookups db eid)]
+      (into e lookups))
+    e))
+
+(defn- inject-known-lookups-recursively
+  [db e]
+  (let [f (fn [new-e [k v]]
+            (if (map? v)
+              (->> (inject-known-lookups db v)
+                   (inject-known-lookups-recursively db)
+                   (assoc new-e k))
+              (assoc new-e k v)))]
+    (reduce f {} e)))
+
 (defn- component-query
   [{:keys [conn parser lookup query]}]
   (when (and lookup query)
@@ -120,13 +137,17 @@
                             pull-result (assoc ::p/entity {lookup pull-result}))
           parse-result    (parser parse-env full-query)
           data            (get parse-result lookup)]
-      data)))
+      (inject-known-lookups-recursively db data))))
 
 (def ^:private TightropeContext (react/createContext))
 
 (defn ds-mixin
-  [& [{:keys [mount-tx unmount-tx freshen? auto-retract?]
-       :as   opts}]]
+  [& [{:as   opts
+       :keys [mount-tx
+              unmount-tx
+              freshen?
+              auto-retract?
+              ]}]]
   {:static-properties {:contextType TightropeContext}
    ;; -------------------------------------------------------------------------------
    :will-mount        (fn will-mount [{:rum/keys [react-component] :as state}]
