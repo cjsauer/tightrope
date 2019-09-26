@@ -16,11 +16,12 @@
     req))
 
 (defonce app-ctx (rope/make-framework-context
-                  {:schema    model/schema
-                   :resolvers (concat shared-resolvers/all
-                                      client-resolvers/all)
-                   :remote    {:uri "/api"
-                               :request-middleware authz-middleware}}))
+                  {:schema      model/schema
+                   :parser-opts {:resolvers (concat shared-resolvers/all
+                                                    client-resolvers/all)}
+                   :remote      {:uri "/api"
+                                 :request-middleware authz-middleware}
+                   }))
 
 (defn ^:dev/after-load mount
   []

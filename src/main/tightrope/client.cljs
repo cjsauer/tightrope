@@ -211,21 +211,20 @@
       (rrf))))
 
 (defn- default-parser
-  [{:keys [resolvers] :as ctx}]
-  (let [additional-env (dissoc ctx :reslovers)]
-    (p/parser
-     {::p/env     (merge
-                   {::p/reader               [p/map-reader
-                                              pc/reader2
-                                              pc/open-ident-reader
-                                              p/env-placeholder-reader]
-                    ::p/placeholder-prefixes #{">"}}
-                   additional-env)
-      ::p/mutate  pc/mutate
-      ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
-                   p/error-handler-plugin
-                   p/elide-special-outputs-plugin
-                   p/trace-plugin]})))
+  [{:keys [resolvers env] :as opts}]
+  (p/parser
+   {::p/env     (merge
+                 {::p/reader               [p/map-reader
+                                            pc/reader2
+                                            pc/open-ident-reader
+                                            p/env-placeholder-reader]
+                  ::p/placeholder-prefixes #{">"}}
+                 env)
+    ::p/mutate  pc/mutate
+    ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
+                 p/error-handler-plugin
+                 p/elide-special-outputs-plugin
+                 p/trace-plugin]}))
 
 (defn ropeid
   []
@@ -236,14 +235,14 @@
   (assoc schema ::id {:db/unique :db.unique/identity}))
 
 (defn make-framework-context
-  [{:keys [schema parser remote] :as ctx}]
+  [{:keys [schema parser-opts remote] :as ctx}]
   (let [conn     (-> schema enrich-schema ds/create-conn)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
     {:conn     conn
      :registry registry
-     :parser   (or parser
-                   (default-parser ctx))
+     :parser   (or (:parser ctx)
+                   (default-parser parser-opts))
      :remote   remote
      }))
 
