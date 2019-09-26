@@ -6,9 +6,11 @@
 (defn- post!
   [{:keys [remote] :as ctx} req]
   (go
-    (let [middleware-fn (get remote :request-middleware (fn [_ r] r))
-          full-req      (middleware-fn ctx req)]
-      (<! (http/post (:uri remote) full-req)))))
+    (let [req-middleware-fn  (get remote :request-middleware (fn [_ r] r))
+          resp-middleware-fn (get remote :response-middleware (fn [_ r] r))
+          full-req           (req-middleware-fn ctx req)
+          resp               (<! (http/post (:uri remote) full-req))]
+      (resp-middleware-fn ctx resp))))
 
 (defn- handle-freshen-success
   [{:keys [conn]} lookup response]
