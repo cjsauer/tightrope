@@ -6,8 +6,8 @@
 
 (def handler
   (rope/tightrope-handler
-   {:path "/api"
-    :parser-opts {:env {}
+   {:uri         "/api"
+    :parser-opts {:env       {}
                   :resolvers (concat shared-resolvers/all
                                      server-resolvers/all)}}))
 

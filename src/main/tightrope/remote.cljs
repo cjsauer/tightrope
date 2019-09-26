@@ -21,7 +21,7 @@
           req         {:edn-params full-query}
           wrapped-req ((:request-middleware remote) ctx req)
           {:keys [status] :as response}
-          (<! (http/post (:path remote) wrapped-req))]
+          (<! (http/post (:uri remote) wrapped-req))]
       (cond
         (< status 300) (handle-freshen-success ctx lookup response)
         :default       (throw (ex-info "Freshen responded with non-200 status"
@@ -47,7 +47,7 @@
           req           {:edn-params full-mutation}
           wrapped-req   ((:request-middleware remote) ctx req)
           {:keys [status] :as response}
-          (<! (http/post (:path remote) wrapped-req))]
+          (<! (http/post (:uri remote) wrapped-req))]
       (cond
         (< status 300) (handle-mutation-success ctx mutation response)
         :default       (throw (ex-info "Mutation responded with non-200 status"

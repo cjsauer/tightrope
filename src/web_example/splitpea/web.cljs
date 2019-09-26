@@ -19,7 +19,7 @@
                   {:schema    model/schema
                    :resolvers (concat shared-resolvers/all
                                       client-resolvers/all)
-                   :remote    {:path "/api"
+                   :remote    {:uri "/api"
                                :request-middleware authz-middleware}}))
 
 (defn ^:dev/after-load mount

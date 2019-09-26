@@ -33,8 +33,8 @@
                  p/trace-plugin]}))
 
 (defn tightrope-handler
-  [{:keys [path parser-opts] :as handler-opts}]
+  [{:keys [uri parser-opts] :as handler-opts}]
   (let [parser (or (:parser handler-opts)
                    (default-parser parser-opts))]
     (compj/routes
-     (POST path [] (partial handler {:parser parser})))))
+     (POST uri [] (partial handler {:parser parser})))))
