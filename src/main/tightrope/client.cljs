@@ -227,13 +227,13 @@
                                        registry
                                        lookup]} (parse-state state opts )
                                fn-to-remove     (:rerender-fn state)]
-                           (when unmount-tx
-                             (ds/transact! conn unmount-tx))
-                           (when (and auto-retract? lookup)
-                             (ds/transact! conn [[:db/retractEntity lookup]]))
                            (if (and lookup fn-to-remove)
                              (do
                                (swap! registry remove-fn-from-registry lookup fn-to-remove)
+                               (when unmount-tx
+                                 (ds/transact! conn unmount-tx))
+                               (when (and auto-retract? lookup)
+                                 (ds/transact! conn [[:db/retractEntity lookup]]))
                                (dissoc state :rerender-fn))
                              state)))
    ;; -------------------------------------------------------------------------------

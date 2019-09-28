@@ -25,7 +25,7 @@
    (friendly-greeting {:greeting (:user/greeting user)})])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Authentication
+;; Login
 
 (def *login-form
   {:init-tx       {::rope/id     (rope/ropeid)
@@ -47,6 +47,9 @@
               :on-change   #(upsert! {:login/handle (-> % .-target .-value)})}]
      [:button {:on-click login!} "Login!"]
      [:pre (str "LOGIN " data)]]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Authentication
 
 (def *authn
   {:mount-tx [{:db/ident :me
