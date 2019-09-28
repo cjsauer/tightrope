@@ -11,6 +11,43 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
 
+(defn entity->lookup
+  [e & ks]
+  (loop [k (first ks)]
+    (when k
+      (if (contains? e k)
+        [k (get e k)]
+        (recur (first (next ks)))))))
+
+(defn eids->lookups
+  [db & eids]
+  (ds/q '[:find ?attr ?value
+          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
+          :where
+          [(= ?avalue :db.unique/identity)]
+          [?eids ?attr ?value]]
+        db (:schema db) eids))
+
+(defn inject-known-lookups
+  [db e]
+  (if-let [eid (:db/id e)]
+    (let [lookups (eids->lookups db eid)]
+      (into e lookups))
+    e))
+
+(defn inject-known-lookups-recursively
+  [db e]
+  (let [f (fn [new-e [k v]]
+            (if (map? v)
+              (->> (inject-known-lookups db v)
+                   (inject-known-lookups-recursively db)
+                   (assoc new-e k))
+              (assoc new-e k v)))]
+    (reduce f {} e)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; App state helpers
+
 (defn try-pull
   [db selector eid]
   (try
@@ -28,37 +65,87 @@
   [conn lookup m]
   (ds/transact! conn [(upsertion lookup m)]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; query
+
+(defn q
+  ([ctx]
+   (q ctx (:lookup ctx) (:query ctx)))
+  ;; ---------------------------------------------
+  ([ctx target]
+   (q ctx (:lookup target) (:query target)))
+  ;; ---------------------------------------------
+  ([{:keys [conn parser]} lookup query]
+   (let [db              (ds/db conn)
+         pull-result     (try-pull db query lookup)
+         full-query      [{lookup query}]
+         parse-env       (cond-> {:conn conn}
+                           pull-result (assoc ::p/entity {lookup pull-result}))
+         parse-result    (parser parse-env full-query)
+         data            (get parse-result lookup)]
+     (inject-known-lookups-recursively db data))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; freshen
+
+(defn freshen!
+  ([ctx]
+   (let [q (q ctx)]
+     (upsert! (:conn ctx) (:lookup ctx) q)
+     q))
+  ;; ---------------------------------------------
+  ([ctx target]
+   (let [q (q ctx target)]
+     (upsert! (:conn ctx) (:lookup target) q)
+     q))
+  ;; ---------------------------------------------
+  ([ctx lookup query]
+   (let [q (q ctx lookup query)]
+     (upsert! (:conn ctx) lookup q)
+     q)))
+
+(defn freshen!!!
+  ([ctx]
+   (freshen! ctx)
+   (remote/freshen! ctx))
+  ;; ---------------------------------------------
+  ([ctx target]
+   (freshen! ctx target)
+   (remote/freshen! ctx target))
+  ;; ---------------------------------------------
+  ([ctx lookup query]
+   (freshen! ctx lookup query)
+   (remote/freshen! ctx lookup query)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; mutate
+
 (defn mutate!
-  [ctx mutation args]
-  ;; Remote mutation only
-  (remote/mutate! ctx mutation args))
+  ([ctx m args]
+   (mutate! ctx (:lookup ctx) (:query ctx) m args))
+  ;; ---------------------------------------------
+  ([ctx target m args]
+   (mutate! ctx (:lookup target) (:query target) m args))
+  ;; ---------------------------------------------
+  ([{:keys [parser conn]} lookup query m args]
+   (let [full-mutation [{`(~m ~args) query}]
+         result        (parser {} full-mutation)
+         e             (get result lookup)]
+     (upsert! conn lookup e)
+     e)))
 
-(defn mutate-optimistic!
-  [{:keys [parser conn lookup query] :as ctx} mutation args]
-  ;; Remote mutation
-  (mutate! ctx mutation args)
-  ;; Optimistic (local) mutation
-  (let [full-mutation [{`(~mutation ~args) query}]
-        local-result (parser {} full-mutation)
-        mutation-result (get local-result mutation)]
-    (ds/transact! conn [(upsertion lookup mutation-result)])))
-
-(defn entity->lookup
-  [e & ks]
-  (loop [k (first ks)]
-    (when k
-      (if (contains? e k)
-        [k (get e k)]
-        (recur (first (next ks)))))))
-
-(defn eids->lookups
-  [db & eids]
-  (ds/q '[:find ?attr ?value
-          :in $ [[?attr [[?aprop ?avalue] ...]] ...] [?eids ...]
-          :where
-          [(= ?avalue :db.unique/identity)]
-          [?eids ?attr ?value]]
-        db (:schema db) eids))
+(defn mutate!!!
+  ([ctx mut args]
+   (mutate! ctx mut args)
+   (remote/mutate! ctx mut args))
+  ;; ---------------------------------------------
+  ([ctx target mut args]
+   (mutate! ctx target mut args)
+   (remote/mutate! ctx target mut args))
+  ;; ---------------------------------------------
+  ([ctx lookup query mut args]
+   (mutate! ctx lookup query mut args)
+   (remote/mutate! ctx lookup query mut args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Registry
@@ -109,35 +196,6 @@
         derived-lookup {:lookup (derive-lookup props opts)}]
     (merge ctx opts derived-lookup {:props props})))
 
-(defn- inject-known-lookups
-  [db e]
-  (if-let [eid (:db/id e)]
-    (let [lookups (eids->lookups db eid)]
-      (into e lookups))
-    e))
-
-(defn- inject-known-lookups-recursively
-  [db e]
-  (let [f (fn [new-e [k v]]
-            (if (map? v)
-              (->> (inject-known-lookups db v)
-                   (inject-known-lookups-recursively db)
-                   (assoc new-e k))
-              (assoc new-e k v)))]
-    (reduce f {} e)))
-
-(defn- component-query
-  [{:keys [conn parser lookup query]}]
-  (when (and lookup query)
-    (let [db              (ds/db conn)
-          pull-result     (try-pull db query lookup)
-          full-query      [{lookup query}]
-          parse-env       (cond-> {:conn conn}
-                            pull-result (assoc ::p/entity {lookup pull-result}))
-          parse-result    (parser parse-env full-query)
-          data            (get parse-result lookup)]
-      (inject-known-lookups-recursively db data))))
-
 (def ^:private TightropeContext (react/createContext))
 
 (defn ds-mixin
@@ -153,14 +211,14 @@
                         (let [{:keys [conn
                                       registry
                                       lookup
-                                      query] :as s} (parse-state state opts)
+                                      query] :as ctx} (parse-state state opts)
                               rerender-fn #(rum/request-render react-component)]
                           (when mount-tx
                             (ds/transact! conn mount-tx))
                           (if lookup
                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
                                 (when (and freshen? lookup query)
-                                  (remote/freshen! s lookup query))
+                                  (remote/freshen! ctx lookup query))
                                 (assoc state :rerender-fn rerender-fn))
                             state)))
    ;; -------------------------------------------------------------------------------
@@ -183,23 +241,37 @@
                         (let [{:keys [conn
                                       parser
                                       lookup
-                                      query
-                                      props] :as s} (parse-state state opts)
-                              data       (component-query s)
+                                      props] :as ctx} (parse-state state opts)
+                              data       (q ctx)
                               upsert!    (partial upsert! conn lookup)
-                              mutate!    (partial mutate! s)
-                              freshen!   (partial remote/freshen! s lookup query)
+                              q          (partial q ctx)
+                              q+         (partial remote/q ctx)
+                              ;;
+                              freshen!   (partial freshen! ctx)
+                              freshen!!  (partial remote/freshen! ctx)
+                              freshen!!! (partial freshen!!! ctx)
+                              ;;
+                              mutate!    (partial mutate! ctx)
+                              mutate!!   (partial remote/mutate! ctx)
+                              mutate!!!  (partial mutate!!! ctx)
+                              ;;
                               new-props  (cond-> props
                                            data   (assoc ::data data)
                                            lookup (assoc ::upsert! upsert!)
-                                           lookup (assoc ::mutate! mutate!)
-                                           lookup (assoc ::freshen! freshen!)
+                                           true   (assoc ::q q)
+                                           true   (assoc ::q+ q+)
+                                           true   (assoc ::freshen! freshen!)
+                                           true   (assoc ::freshen!! freshen!!)
+                                           true   (assoc ::freshen!!! freshen!!!)
+                                           true   (assoc ::mutate! mutate!)
+                                           true   (assoc ::mutate!! mutate!!)
+                                           true   (assoc ::mutate!!! mutate!!!)
                                            )]
                           (assoc state :rum/args [new-props])))
    })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Framework context/state
+;; Context initialization
 
 (defn on-tx
   [registry {:keys [db-after tx-data]}]

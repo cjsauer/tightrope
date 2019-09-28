@@ -20,6 +20,7 @@
   [_ {:login/keys [handle]}]
   {::pc/input #{:login/handle}
    ::pc/output #{:user/me}}
+  (println "Checking handle: " handle)
   (when-let [user (get @users handle)]
     (println "Loggin in user: " handle)
     {:user/me user}))

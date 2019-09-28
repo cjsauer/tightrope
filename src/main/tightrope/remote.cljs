@@ -13,50 +13,88 @@
           resp               (<! (http/post (:uri remote) full-req))]
       (resp-middleware-fn ctx resp))))
 
-(defn- handle-freshen-success
-  [{:keys [conn]} lookup response]
-  (let [{:keys [body]}     response
-        entity             (get body lookup)
-        entity-with-lookup (conj entity lookup)
-        freshen-retraction [:db.fn/retractAttribute lookup :ui/freshening?]]
-    (ds/transact! conn [entity-with-lookup
-                        freshen-retraction])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; query
+
+(defn- handle-query-success
+  [ctx lookup response]
+  (let [{:keys [body]} response
+        entity         (get body lookup)
+        e-with-lookup  (conj entity lookup)]
+    e-with-lookup))
+
+(defn q
+  ([ctx]
+   (q ctx (:lookup ctx) (:query ctx)))
+  ;;
+  ([ctx target]
+   (q ctx (:lookup target) (:query target)))
+  ;;
+  ([ctx lookup query]
+   (go
+     (let [full-query       [{lookup query}]
+           req              {:transit-params full-query}
+           {:keys [status]
+            :as   response} (<! (post! ctx req))]
+       (cond
+         (< status 300) (handle-query-success ctx lookup response)
+         :default       (throw (ex-info "Query responded with non-200 status"
+                                        {:response response})))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; freshen
 
 ;; TODO: rapid calls to freshen! should be batched into a single query
+
 (defn freshen!
-  [{:keys [conn] :as ctx} lookup query]
-  (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
-  (go
-    (let [full-query       [{lookup query}]
-          req              {:transit-params full-query}
-          {:keys [status]
-           :as   response} (<! (post! ctx req))]
-      (cond
-        (< status 300) (handle-freshen-success ctx lookup response)
-        :default       (throw (ex-info "Freshen responded with non-200 status"
-                                       {:response response}))))))
+  ([ctx]
+   (freshen! ctx (:lookup ctx) (:query ctx)))
+  ;;
+  ([ctx target]
+   (freshen! ctx (:lookup target) (:query target)))
+  ;;
+  ([{:keys [conn] :as ctx} lookup query]
+   (ds/transact! conn [(conj {:ui/freshening? true} lookup)])
+   (go
+     (let [entity             (<! (q ctx lookup query))
+           freshen-retraction [:db.fn/retractAttribute lookup :ui/freshening?]]
+       (ds/transact! conn [entity
+                           freshen-retraction])
+       entity))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; mutate
 
 ;; TODO: :ui/mutation? should be a set of currently in flight mutations,
 ;; i.e. :ui/in-flight-mutations
 
 (defn- handle-mutation-success
-  [{:keys [conn lookup]} mutation response]
+  [{:keys [conn]} lookup m response]
   (let [{:keys [body]}      response
-        entity              (get body mutation)
+        entity              (get body m)
         entity-with-lookup  (conj entity lookup)
         mutating-retraction [:db.fn/retractAttribute lookup :ui/mutating?]]
     (ds/transact! conn [entity-with-lookup
-                        mutating-retraction])))
+                        mutating-retraction])
+    entity-with-lookup))
 
 (defn mutate!
-  [{:keys [conn lookup query] :as ctx} mutation args]
-  (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
-  (go
-    (let [full-mutation    [{`(~mutation ~args) query}]
-          req              {:transit-params full-mutation}
-          {:keys [status]
-           :as   response} (<! (post! ctx req))]
-      (cond
-        (< status 300) (handle-mutation-success ctx mutation response)
-        :default       (throw (ex-info "Mutation responded with non-200 status"
-                                       {:response response}))))))
+  ([ctx mut args]
+   (mutate! ctx (:lookup ctx) (:query ctx) mut args))
+  ;;
+  ([ctx target mut args]
+   (mutate! ctx (:lookup target) (:query target) mut args))
+  ;;
+  ([{:keys [conn] :as ctx} lookup query mut args]
+   (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
+   (go
+     (let [full-mutation    [{`(~mut ~args) query}]
+           req              {:transit-params full-mutation}
+           {:keys [status]
+            :as   response} (<! (post! ctx req))]
+       (cond
+         (< status 300) (handle-mutation-success ctx lookup mut response)
+         :default       (throw (ex-info "Mutation responded with non-200 status"
+                                        {:response response})))))))
