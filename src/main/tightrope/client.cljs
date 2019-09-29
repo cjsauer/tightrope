@@ -85,6 +85,9 @@
          data            (get parse-result lookup)]
      (inject-known-lookups-recursively db data))))
 
+;; Re-export of remote query
+(def q+ remote/q)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; freshen
 
@@ -251,7 +254,7 @@
                               data       (q ctx)
                               upsert!    (partial upsert! conn lookup)
                               q          (partial q ctx)
-                              q+         (partial remote/q ctx)
+                              q+         (partial q+ ctx)
                               ;;
                               freshen!   (partial freshen! ctx)
                               freshen!!  (partial freshen!! ctx)

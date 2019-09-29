@@ -7,6 +7,7 @@
 (def ^:private http-params-key :edn-params)
 (def ^:private http-accept-medium "application/edn")
 (def ^:private max-batch-size 100)
+(def ^:private batch-bin-size-ms 16) ;; roughly 1 frame
 
 (def ^:private scheduled-posts-chan (a/chan max-batch-size))
 
@@ -39,7 +40,7 @@
 (defn- post-loop
   [ctx]
   (go-loop [reqs+retcs []]
-    (let [tc (a/timeout 100)]
+    (let [tc (a/timeout batch-bin-size-ms)]
       (a/alt!
         tc        ([_]
                    (let [reqs        (map first reqs+retcs)
@@ -51,7 +52,7 @@
                               (recur (conj reqs+retcs r)))))))
 
 (def ^:private debounced-post-loop
-  (gfn/debounce post-loop 100))
+  (gfn/debounce post-loop batch-bin-size-ms))
 
 (defn- schedule-post!
   [ctx req]
