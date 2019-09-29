@@ -104,6 +104,9 @@
      (upsert! (:conn ctx) lookup q)
      q)))
 
+;; Re-export of remote freshen
+(def freshen!! remote/freshen!)
+
 (defn freshen!!!
   ([ctx]
    (freshen! ctx)
@@ -133,6 +136,9 @@
          e             (get result lookup)]
      (upsert! conn lookup e)
      e)))
+
+;; Re-export of remote mutate
+(def mutate!! remote/mutate!)
 
 (defn mutate!!!
   ([ctx mut args]
@@ -248,11 +254,11 @@
                               q+         (partial remote/q ctx)
                               ;;
                               freshen!   (partial freshen! ctx)
-                              freshen!!  (partial remote/freshen! ctx)
+                              freshen!!  (partial freshen!! ctx)
                               freshen!!! (partial freshen!!! ctx)
                               ;;
                               mutate!    (partial mutate! ctx)
-                              mutate!!   (partial remote/mutate! ctx)
+                              mutate!!   (partial mutate!! ctx)
                               mutate!!!  (partial mutate!!! ctx)
                               ;;
                               new-props  (cond-> props

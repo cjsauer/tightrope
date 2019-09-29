@@ -1,7 +1,14 @@
 (ns tightrope.remote
   (:require [cljs-http.client :as http]
-            [cljs.core.async :as a :refer [go <!]]
-            [datascript.core :as ds]))
+            [cljs.core.async :as a :refer [go go-loop <! >!]]
+            [datascript.core :as ds]
+            [goog.functions :as gfn]))
+
+(def ^:private http-params-key :edn-params)
+(def ^:private http-accept-medium "application/edn")
+(def ^:private max-batch-size 100)
+
+(def ^:private scheduled-posts-chan (a/chan max-batch-size))
 
 (defn- post!
   [{:keys [remote] :as ctx} req]
@@ -9,9 +16,50 @@
     (let [req-middleware-fn  (get remote :request-middleware (fn [_ r] r))
           resp-middleware-fn (get remote :response-middleware (fn [_ r] r))
           mw-req             (req-middleware-fn ctx req)
-          full-req           (update mw-req :headers merge {"Accept" "application/transit+json"})
+          full-req           (update mw-req :headers merge {"Accept" http-accept-medium})
           resp               (<! (http/post (:uri remote) full-req))]
       (resp-middleware-fn ctx resp))))
+
+(defn- batch-requests
+  [reqs]
+  (when-let [proto (first reqs)]
+    (reduce (fn [p req]
+              (update p http-params-key concat (get req http-params-key)))
+            proto
+            (rest reqs))))
+
+(defn- fan-out-batched-response
+  [resp chans]
+  (go-loop [cs chans]
+    (when-let [c (first cs)]
+      (>! c resp)
+      (a/close! c)
+      (recur (next cs)))))
+
+(defn- post-loop
+  [ctx]
+  (go-loop [reqs+retcs []]
+    (let [tc (a/timeout 100)]
+      (a/alt!
+        tc        ([_]
+                   (let [reqs        (map first reqs+retcs)
+                         batched-req (batch-requests reqs)
+                         resp        (<! (post! ctx batched-req))
+                         chans       (map second reqs+retcs)]
+                     (fan-out-batched-response resp chans)))
+        scheduled-posts-chan ([r]
+                              (recur (conj reqs+retcs r)))))))
+
+(def ^:private debounced-post-loop
+  (gfn/debounce post-loop 100))
+
+(defn- schedule-post!
+  [ctx req]
+  (let [retc (a/chan)]
+    (go
+      (>! scheduled-posts-chan [req retc])
+      (debounced-post-loop ctx))
+    retc))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -34,9 +82,9 @@
   ([ctx lookup query]
    (go
      (let [full-query       [{lookup query}]
-           req              {:transit-params full-query}
+           req              {http-params-key full-query}
            {:keys [status]
-            :as   response} (<! (post! ctx req))]
+            :as   response} (<! (schedule-post! ctx req))]
        (cond
          (< status 300) (handle-query-success ctx lookup response)
          :default       (throw (ex-info "Query responded with non-200 status"
@@ -91,9 +139,9 @@
    (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
    (go
      (let [full-mutation    [{`(~mut ~args) query}]
-           req              {:transit-params full-mutation}
+           req              {http-params-key full-mutation}
            {:keys [status]
-            :as   response} (<! (post! ctx req))]
+            :as   response} (<! (schedule-post! ctx req))]
        (cond
          (< status 300) (handle-mutation-success ctx lookup mut response)
          :default       (throw (ex-info "Mutation responded with non-200 status"
