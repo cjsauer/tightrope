@@ -1,3 +1,43 @@
-# TODO: write great docs
+# Tightrope
 
-Bump to test updates
+- Guide
+  - Overview
+  - Installation and Setup
+  - Schema
+    - mainly unique and ref-type attributes
+    - derivation of datascript schema from datomic schema
+  - The UI model
+    - concept of mounting entities
+    - `:idents` and `:lookup`
+    - `:query` and `:data`
+    - `:mount-tx` and `:unmount-tx`
+      - `:auto-retract?` and `:init-tx`
+    - table of q/freshen/mutate
+      - `touches app state | optional target | mutates external | network | async`
+      - `!` for local (sync)
+      - `!!` for remote (async)
+      - `!!!` for remote `!!` with optimistic local `!`
+  - Client State (datascript)
+    - central atom of all application state
+    - reactively updates the UI on transact
+    - mutating app state with `upsert!`
+      - also `(transact! [(upsertion ...)])`
+  - External State (pathom)
+    - connects application state to outside world
+      - datascript and datomic results available to parser automatically (no resolvers required)
+    - writing resolvers
+      - local (cljs)
+      - server (clj)
+      - shared (cljc)   
+      - 2 special inputs: datascript and datomic (don't require resolvers)
+    - loading (freshening) from external state with `freshen!/!!/!!!`
+    - mutating external state with `mutate!/!!/!!!`
+    - I/O of the entire application (at all stack levels)
+    - inputs include the browser window, local storage, cookies, remote APIs
+  - Going Remote
+    - `:remote` configuration
+    - tightrope server handler
+      - request and response middleware
+      - `:request` in parser env
+    - transit vs edn encoding
+    - bring your own middleware
