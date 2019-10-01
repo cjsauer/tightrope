@@ -28,9 +28,9 @@
 ;; Login
 
 (def *login-form
-  {:init-tx       {::rope/id     (rope/ropeid)
+  {:idents        #{::rope/id}
+   :init-tx       {::rope/id     (rope/ropeid)
                    :login/handle ""}
-   :idents        #{::rope/id}
    :query         [:login/handle :ui/mutating?]
    :auto-retract? true
    })
@@ -52,9 +52,9 @@
 ;; Authentication
 
 (def *authn
-  {:mount-tx [{:db/ident :me
+  {:lookup   [:db/ident :me]
+   :mount-tx [{:db/ident :me
                :login/form (:init-tx *login-form)}]
-   :lookup   [:db/ident :me]
    :query    [{:user/me (:query *user-dashboard)} :login/form :ui/freshening?]
    ;; :freshen? true
    })
