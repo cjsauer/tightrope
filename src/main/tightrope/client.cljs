@@ -36,7 +36,7 @@
       (into e lookups))
     e))
 
-(defn inject-known-lookups-recursively
+(defn inject-all-known-lookups
   [db e]
   (wlk/postwalk (partial inject-known-lookups db) e))
 
@@ -78,7 +78,7 @@
                            pull-result (assoc ::p/entity {lookup pull-result}))
          parse-result    (parser parse-env full-query)
          data            (get parse-result lookup)]
-     (inject-known-lookups-recursively db data))))
+     (inject-all-known-lookups db data))))
 
 ;; Re-export of remote query
 (def q+ remote/q)
