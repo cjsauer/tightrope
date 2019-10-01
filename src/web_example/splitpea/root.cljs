@@ -13,7 +13,7 @@
    [:h1 {:style {:font-size "2em"}} greeting]])
 
 (def *user-dashboard
-  {:idents [:user/handle]
+  {:idents #{:user/handle}
    :query  [:user/handle :user/greeting]
    })
 
@@ -30,7 +30,7 @@
 (def *login-form
   {:init-tx       {::rope/id     (rope/ropeid)
                    :login/handle ""}
-   :idents        [::rope/id]
+   :idents        #{::rope/id}
    :query         [:login/handle :ui/mutating?]
    :auto-retract? true
    })
