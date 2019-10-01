@@ -308,7 +308,10 @@
 
 (defn- enrich-schema
   [schema]
-  (assoc schema ::id {:db/unique :db.unique/identity}))
+  (assoc schema
+         ::id      {:db/unique :db.unique/identity}
+         :db/ident {:db/unique :db.unique/identity}
+         ))
 
 (defn make-framework-context
   [{:keys [schema parser-opts remote] :as ctx}]
