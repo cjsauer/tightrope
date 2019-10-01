@@ -6,7 +6,8 @@
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.sugar]
-            [tightrope.remote :as remote]))
+            [tightrope.remote :as remote]
+            [clojure.walk :as wlk]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -37,13 +38,7 @@
 
 (defn inject-known-lookups-recursively
   [db e]
-  (let [f (fn [new-e [k v]]
-            (if (map? v)
-              (->> (inject-known-lookups db v)
-                   (inject-known-lookups-recursively db)
-                   (assoc new-e k))
-              (assoc new-e k v)))]
-    (reduce f {} e)))
+  (wlk/postwalk (partial inject-known-lookups db) e))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; App state helpers
