@@ -13,12 +13,12 @@
 ;; Utilities
 
 (defn entity->lookup
-  [e & ks]
-  (loop [k (first ks)]
+  [e & id-attrs]
+  (loop [k (first id-attrs)]
     (when k
       (if (contains? e k)
         [k (get e k)]
-        (recur (first (next ks)))))))
+        (recur (first (next id-attrs)))))))
 
 (defn eids->lookups
   [db & eids]
@@ -29,25 +29,25 @@
           [?eids ?attr ?value]]
         db (:schema db) eids))
 
-(defn inject-known-lookups
+(defn with-known-lookups
   [db e]
   (if-let [eid (:db/id e)]
     (let [lookups (eids->lookups db eid)]
       (into e lookups))
     e))
 
-(defn inject-all-known-lookups
+(defn with-all-known-lookups
   [db e]
-  (wlk/postwalk (partial inject-known-lookups db) e))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; App state helpers
+  (wlk/postwalk (partial with-known-lookups db) e))
 
 (defn try-pull
   [db selector eid]
   (try
     (ds/pull db selector eid)
     (catch :default e nil)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; upsert
 
 (defn upsertion
   [lookup m]
@@ -78,7 +78,7 @@
                            pull-result (assoc ::p/entity {lookup pull-result}))
          parse-result    (parser parse-env full-query)
          data            (get parse-result lookup)]
-     (inject-all-known-lookups db data))))
+     (with-all-known-lookups db data))))
 
 ;; Re-export of remote query
 (def q+ remote/q)
