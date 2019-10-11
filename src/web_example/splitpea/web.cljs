@@ -5,9 +5,9 @@
             [datascript.core :as ds]
             [tightrope.client :as rope]
             [splitpea.model :as model]
-            [splitpea.root :as root]
-            [splitpea.resolvers :as shared-resolvers]
-            [splitpea.client.resolvers :as client-resolvers]))
+            [splitpea.web.root :as root]
+            [splitpea.web.resolvers :as shared-resolvers]
+            [splitpea.web.resolvers :as web-resolvers]))
 
 (defn- authz-middleware
   [{:keys [parser]} req]
@@ -18,10 +18,9 @@
 (defonce app-ctx (rope/make-framework-context
                   {:schema      model/schema
                    :parser-opts {:resolvers (concat shared-resolvers/all
-                                                    client-resolvers/all)}
+                                                    web-resolvers/all)}
                    :remote      {:uri "/api"
-                                 ;; :request-middleware authz-middleware
-                                 }
+                                 :request-middleware authz-middleware}
                    }))
 
 (defn ^:dev/after-load mount

@@ -1,4 +1,4 @@
-(ns splitpea.client.resolvers
+(ns splitpea.web.resolvers
   "Client-only resolvers"
   (:require [com.wsscode.pathom.connect :as pc]))
 

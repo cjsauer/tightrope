@@ -4,11 +4,6 @@
 
 (def users (atom {"calvin" {:user/handle "calvin"}}))
 
-(pc/defresolver server-time
-  [_ _]
-  {::pc/output #{:server/time}}
-  {:server/time (str (java.util.Date.))})
-
 (pc/defresolver me
   [{:keys [request]} _]
   {::pc/output #{:user/me}}
@@ -25,6 +20,5 @@
     (println "Loggin in user: " handle)
     {:user/me user}))
 
-(def all [server-time
-          me
+(def all [me
           login!])

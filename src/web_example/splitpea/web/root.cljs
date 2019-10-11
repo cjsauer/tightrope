@@ -1,4 +1,4 @@
-(ns splitpea.root
+(ns splitpea.web.root
   (:require [rum.core :as rum]
             [tightrope.client :as rope]))
 
@@ -56,7 +56,7 @@
    :mount-tx [{:db/ident :me
                :login/form (:init-tx *login-form)}]
    :query    [{:user/me (:query *user-dashboard)} :login/form :ui/freshening?]
-   ;; :freshen? true
+   :freshen? true
    })
 
 (rum/defc authn

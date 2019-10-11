@@ -1,0 +1,4 @@
+{:allow    [splitpea.model/team-dag?]
+ :lambdas  {:tightrope-handler {:fn splitpea.server.ion/ionized-handler
+                                :description "Tightrope endpoint for splitpea"}}
+ :app-name "splitpea-dev"}
