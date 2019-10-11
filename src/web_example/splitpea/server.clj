@@ -1,50 +1,40 @@
 (ns splitpea.server
-  (:require [tightrope.server :as rope]
+  (:require [tightrope.server.ions :as irope]
+            [splitpea.model :as model]
             [splitpea.resolvers :as shared-resolvers]
             [splitpea.server.resolvers :as server-resolvers]
-            [splitpea.server.db :as db]
-            [com.wsscode.pathom.core :as p]
-            [com.wsscode.pathom.connect :as pc]
-            [com.wsscode.pathom.connect.datomic :as pcd]
-            [com.wsscode.pathom.connect.datomic.client :refer [client-config]]
+            [datomic.ion.lambda.api-gateway :as apigw]
             ))
 
-(defn custom-parser
-  [{:keys [env resolvers]}]
-  (p/parallel-parser
-   {::p/env     (merge
-                 {::p/reader               [p/map-reader
-                                            pc/parallel-reader
-                                            pc/open-ident-reader
-                                            p/env-placeholder-reader]
-                  ::p/placeholder-prefixes #{">"}}
-                 env)
-    ::p/mutate  pc/mutate-async
-    ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
-                 (pcd/datomic-connect-plugin (assoc client-config ::pcd/conn (:conn env)))
-                 p/elide-special-outputs-plugin
-                 p/error-handler-plugin
-                 p/trace-plugin]}))
+(def config
+  {:path           "/api"
+   :parser-opts    {:env       {}
+                    :resolvers (concat shared-resolvers/all
+                                       server-resolvers/all)}
+   :schemas        [model/datomic-schema]
+   :db-name        "splitpea-dev-db"
+   :datomic-config {:server-type   :ion
+                    :region        "us-east-1"
+                    :system        "splitpea-dev"
+                    :creds-profile "sandbox"
+                    :endpoint      "http://entry.splitpea-dev.us-east-1.datomic.net:8182/"
+                    :proxy-port    8182}})
 
 (defn handler
   [req]
-  (let [all-resolvers (concat shared-resolvers/all
-                              server-resolvers/all)
-        rope-config   {:path "/api"
-                       :parser (custom-parser {:resolvers all-resolvers
-                                               :env {:conn (db/get-conn)}})}
-        rope-handler  (rope/tightrope-handler rope-config)]
+  (let [rope-handler (irope/ion-handler config)]
     (rope-handler req)))
+
+(def ionized-handler
+  (apigw/ionize handler))
 
 
 (comment
 
   (require '[clojure.java.io :as io]
-           '[clojure.core.async :as a])
-
-  (let [parser (custom-parser {:resolvers (concat shared-resolvers/all server-resolvers/all)
-                               :env {:conn (db/get-conn)}})]
-    (a/<!! (parser {} [{[:team/slug "red-team"] [{:team/members [:user/email]}]}])))
+           '[clojure.core.async :as a]
+           '[datomic.client.api :as d]
+           '[splitpea.server.db :as db])
 
   (-> (handler
        {:request-method :post
@@ -55,5 +45,36 @@
       :body
       slurp
       )
+
+  (defn load-sample-data
+    []
+    (let [tx-data [{:db/ensure    :team/validate
+                    :team/slug    "blue-team"
+                    :team/members [{:user/email "another"}
+                                   {:user/email "calvin"}
+                                   {:user/email "brittany"}]}
+                   {:db/ensure    :team/validate
+                    :team/slug    "red-team"
+                    :team/members [{:user/email "derek"}]
+                    }]]
+      (d/transact (irope/get-conn config) {:tx-data tx-data})
+      ))
+
+  (load-sample-data)
+
+  (db/entity-by (irope/get-db config) :user/email "calvin")
+
+  (db/entity-by (irope/get-db config) :team/slug "red-team")
+
+  (db/entity-by (irope/get-db config) :team/slug "blue-team" '[* {:team/members [*]}])
+
+  (db/xact (irope/get-conn config) [[:db/retract [:team/slug "red-team"]
+                                     :team/members [:user/email "calvin"]]])
+
+  (db/collaborators (irope/get-db config) [:user/email "calvin"] [:user/email])
+
+
+
+  (d/delete-database (irope/get-client config) {:db-name "splitpea-dev-db"})
 
   )

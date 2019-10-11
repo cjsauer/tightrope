@@ -16,7 +16,7 @@
     req))
 
 (defonce app-ctx (rope/make-framework-context
-                  {:schema      model/schema
+                  {:schema      model/datascript-schema
                    :parser-opts {:resolvers (concat shared-resolvers/all
                                                     web-resolvers/all)}
                    :remote      {:uri "/api"

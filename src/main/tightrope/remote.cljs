@@ -4,6 +4,7 @@
             [datascript.core :as ds]
             [goog.functions :as gfn]))
 
+;; TODO: encoding should be set at the config level under the :remote key
 (def ^:private http-params-key :edn-params)
 (def ^:private http-accept-medium "application/edn")
 (def ^:private max-batch-size 100)
@@ -89,13 +90,12 @@
        (cond
          (< status 300) (handle-query-success ctx lookup response)
          :default       (throw (ex-info "Query responded with non-200 status"
-                                        {:response response})))))))
+                                        {:request  req
+                                         :response response})))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; freshen
-
-;; TODO: rapid calls to freshen! should be batched into a single query
 
 (defn freshen!
   ([ctx]
@@ -146,4 +146,5 @@
        (cond
          (< status 300) (handle-mutation-success ctx lookup mut response)
          :default       (throw (ex-info "Mutation responded with non-200 status"
-                                        {:response response})))))))
+                                        {:request  req
+                                         :response response})))))))

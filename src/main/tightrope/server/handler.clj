@@ -1,4 +1,4 @@
-(ns tightrope.server
+(ns tightrope.server.handler
   (:require [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
             [clojure.core.async :as a :refer [<!!]]
@@ -15,7 +15,7 @@
      :body    parse-result}))
 
 (defn- default-parser
-  [{:keys [env resolvers]}]
+  [{:keys [env resolvers plugins]}]
   (p/parallel-parser
    {::p/env     (merge
                  {::p/reader               [p/map-reader
@@ -25,10 +25,11 @@
                   ::p/placeholder-prefixes #{">"}}
                  env)
     ::p/mutate  pc/mutate-async
-    ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
-                 p/elide-special-outputs-plugin
-                 p/error-handler-plugin
-                 p/trace-plugin]}))
+    ::p/plugins (concat plugins
+                        [(pc/connect-plugin {::pc/register (or resolvers [])})
+                         p/elide-special-outputs-plugin
+                         p/error-handler-plugin
+                         p/trace-plugin])}))
 
 (defn tightrope-handler
   [{:keys [path parser-opts] :as handler-opts}]
