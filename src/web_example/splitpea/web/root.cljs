@@ -78,4 +78,4 @@
 (rum/defc root
   []
   [:div
-   [:h1 "Splitpea"]])
+   [:h1 "splitpea"]])
