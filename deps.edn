@@ -16,10 +16,8 @@
 
  :aliases
  {:v1.10.1     {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}
-  :web-example {:extra-paths ["src/web_example" "resources"]}
-  :dev         {:extra-paths ["src/dev"]
+  :dev         {:extra-paths ["src/web_example" "src/dev" "resources"]
                 :extra-deps  {thheller/shadow-cljs     {:mvn/version "2.8.56"}
                               com.datomic/client-cloud {:mvn/version "0.8.78"}
                               com.datomic/ion-dev      {:mvn/version "0.9.234"}}}
-  :test        {:extra-paths ["src/test"]}
   }}

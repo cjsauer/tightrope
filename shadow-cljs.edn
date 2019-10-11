@@ -1,4 +1,4 @@
-{:deps {:aliases [:web-example :dev :test]}
+{:deps {:aliases [:dev :test]}
 
  :dev-http {8000 {:root    "public"
                   :handler splitpea.server/handler
