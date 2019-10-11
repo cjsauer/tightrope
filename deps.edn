@@ -9,7 +9,7 @@
         com.datomic/ion            {:mvn/version "0.9.35"}
         com.wsscode/pathom         {:mvn/version "2.2.25"}
         com.wsscode/pathom-datomic {:git/url "https://github.com/cjsauer/pathom-datomic.git"
-                                    :sha     "6b97293178fe10b21cf0ade2fd8556b40881a47c"}
+                                    :sha     "23e23ac8ae96dba5461cd020879d896c355f65d3"}
         }
 
  :mvn/repos {"datomic-cloud" {:url "s3://datomic-releases-1fc2183a/maven/releases"}}
