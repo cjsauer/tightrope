@@ -16,8 +16,9 @@
 (defn app-ctx-fixture
   [f]
   (binding [*app-ctx* (rope/make-framework-context
-                       {:schema      {:user/handle     {:db/unique :db.unique/identity}
-                                      :user/birth-name {:db/unique :db.unique/identity}}
+                       {:schema      {:user/handle      {:db/unique :db.unique/identity}
+                                      :user/birth-name  {:db/unique :db.unique/identity}
+                                      :user/power-level {}}
                         :parser-opts {:resolvers [greeting-resolver]}
                         :remote      {}})]
     (ds/transact! (:conn *app-ctx*) [{:user/handle      "goku"
@@ -27,7 +28,7 @@
 
 (use-fixtures :each app-ctx-fixture)
 
-(deftest automatic-datascript-resolvers
+(deftest automatic-datascript-resolution
   (let [result (rope/q *app-ctx* [:user/handle "goku"] [:user/power-level])]
     (is (= 9000
            (:user/power-level result)))))
@@ -54,3 +55,13 @@
   (is (= (rope/eids->lookups (-> *app-ctx* :conn ds/db) 1)
          #{[:user/birth-name "kakarot"]
            [:user/handle "goku"]})))
+
+(deftest pull-known-includes-only-keys-in-schema
+  (ds/transact! (:conn *app-ctx*) [{:user/handle   "goku"
+                                    :not-in-schema 42}])
+  (is (= (rope/pull-known (-> *app-ctx* :conn ds/db) '[:user/handle :user/power-level :not-in-schema] 1)
+         {:user/handle "goku"
+          :user/power-level 9000}))
+  (is (= (rope/try-pull (-> *app-ctx* :conn ds/db) '[:user/handle :not-in-schema] 1)
+         {:user/handle "goku"
+          :not-in-schema 42})))

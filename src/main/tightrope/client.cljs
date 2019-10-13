@@ -6,6 +6,7 @@
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
             [tightrope.remote :as remote]
+            [tightrope.schema :as rope-schema]
             [clojure.walk :as wlk]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -45,6 +46,11 @@
     (ds/pull db selector eid)
     (catch :default e nil)))
 
+(defn pull-known
+  [db selector eid]
+  (->> (try-pull db selector eid)
+       (rope-schema/select-schema-keys (:schema db))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; upsert
 
@@ -72,7 +78,7 @@
   ([{:keys [conn parser]} lookup query]
    (let [db           (ds/db conn)
          query*       (conj query :db/id)
-         pull-result  (try-pull db query* lookup)
+         pull-result  (pull-known db query* lookup)
          pull-result? (-> pull-result (dissoc :db/id) seq)
          parse-env    (cond-> {:conn conn}
                         pull-result? (assoc ::p/entity {lookup pull-result}))
@@ -310,10 +316,11 @@
 
 (defn- enrich-schema
   [schema]
-  (assoc schema
-         ::id      {:db/unique :db.unique/identity}
-         :db/ident {:db/unique :db.unique/identity}
-         ))
+  (merge schema
+         {::id            {:db/unique :db.unique/identity}
+          :db/ident       {:db/unique :db.unique/identity}
+          :ui/freshening? {}
+          :ui/mutating?   {}}))
 
 (defn make-framework-context
   [{:keys [schema parser-opts remote] :as ctx}]

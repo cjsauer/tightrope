@@ -1,5 +1,10 @@
 (ns tightrope.schema)
 
+(defn select-schema-keys
+  [ds-schema e]
+  (select-keys e
+               (conj (keys ds-schema) :db/id)))
+
 (defn datomic->datascript
   "Converts a datomic schema into its equivalent datascript schema."
   [schema]
@@ -11,6 +16,5 @@
                    (= :db.cardinality/many cardinality) (assoc :db/cardinality cardinality)
                    (= :db.type/ref valueType)           (assoc :db/valueType valueType))])]
       (into {}
-            (comp (map select-compat)
-                  (filter (fn [[k v]] (not-empty v))))
+            (map select-compat)
             schema-kvs))))
