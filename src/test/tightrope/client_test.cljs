@@ -23,14 +23,14 @@
                         :remote      {}})]
     (ds/transact! (:conn *app-ctx*) [{:user/handle      "goku"
                                       :user/birth-name  "kakarot"
-                                      :user/power-level 9000}])
+                                      :user/power-level 9001}])
     (f)))
 
 (use-fixtures :each app-ctx-fixture)
 
 (deftest automatic-datascript-resolution
   (let [result (rope/q *app-ctx* [:user/handle "goku"] [:user/power-level])]
-    (is (= 9000
+    (is (= 9001
            (:user/power-level result)))))
 
 (deftest resolvers-can-derive-from-datascript
@@ -44,7 +44,7 @@
            {:db/id            1
             :user/handle      "goku"
             :user/birth-name  "kakarot"
-            :user/power-level 9000}))))
+            :user/power-level 9001}))))
 
 (deftest upsertion-is-the-new-data-plus-lookup
   (is (= (rope/upsertion [:user/handle "goku"] {:user/appetite :insatiable})
@@ -61,7 +61,7 @@
                                     :not-in-schema 42}])
   (is (= (rope/pull-known (-> *app-ctx* :conn ds/db) '[:user/handle :user/power-level :not-in-schema] 1)
          {:user/handle "goku"
-          :user/power-level 9000}))
+          :user/power-level 9001}))
   (is (= (rope/try-pull (-> *app-ctx* :conn ds/db) '[:user/handle :not-in-schema] 1)
          {:user/handle "goku"
           :not-in-schema 42})))
