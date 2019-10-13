@@ -5,7 +5,6 @@
             [datascript.core :as ds]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
-            [com.wsscode.pathom.sugar]
             [tightrope.remote :as remote]
             [clojure.walk :as wlk]))
 
@@ -13,12 +12,12 @@
 ;; Utilities
 
 (defn entity->lookup
-  [e & id-attrs]
-  (loop [k (first id-attrs)]
+  [e & idents]
+  (loop [k (first idents)]
     (when k
       (if (contains? e k)
         [k (get e k)]
-        (recur (first (next id-attrs)))))))
+        (recur (first (next idents)))))))
 
 (defn eids->lookups
   [db & eids]
@@ -71,14 +70,16 @@
    (q ctx (:lookup target) (:query target)))
   ;; ---------------------------------------------
   ([{:keys [conn parser]} lookup query]
-   (let [db              (ds/db conn)
-         pull-result     (try-pull db query lookup)
-         full-query      [{lookup query}]
-         parse-env       (cond-> {:conn conn}
-                           pull-result (assoc ::p/entity {lookup pull-result}))
-         parse-result    (parser parse-env full-query)
-         data            (get parse-result lookup)]
-     (with-all-known-lookups db data))))
+   (let [db           (ds/db conn)
+         query*       (conj query :db/id)
+         pull-result  (try-pull db query* lookup)
+         pull-result? (-> pull-result (dissoc :db/id) seq)
+         parse-env    (cond-> {:conn conn}
+                        pull-result? (assoc ::p/entity {lookup pull-result}))
+         full-query   [{lookup query*}]
+         parse-result (parser parse-env full-query)
+         result       (get parse-result lookup)]
+     (with-all-known-lookups db result))))
 
 ;; Re-export of remote query
 (def q+ remote/q)
@@ -88,19 +89,19 @@
 
 (defn freshen!
   ([ctx]
-   (let [q (q ctx)]
-     (upsert! (:conn ctx) (:lookup ctx) q)
-     q))
+   (let [res (q ctx)]
+     (upsert! (:conn ctx) (:lookup ctx) res)
+     res))
   ;; ---------------------------------------------
   ([ctx target]
-   (let [q (q ctx target)]
-     (upsert! (:conn ctx) (:lookup target) q)
-     q))
+   (let [res (q ctx target)]
+     (upsert! (:conn ctx) (:lookup target) res)
+     res))
   ;; ---------------------------------------------
   ([ctx lookup query]
-   (let [q (q ctx lookup query)]
-     (upsert! (:conn ctx) lookup q)
-     q)))
+   (let [res (q ctx lookup query)]
+     (upsert! (:conn ctx) lookup res)
+     res)))
 
 ;; Re-export of remote freshen
 (def freshen!! remote/freshen!)
@@ -180,7 +181,8 @@
 
 (defn- get-props
   [state]
-  (or (-> state :rum/args first) {}))
+  (or (-> state :rum/args first)
+      {}))
 
 (defn- props-or-opts
   [props opts k]
