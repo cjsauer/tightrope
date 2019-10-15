@@ -18,12 +18,17 @@
   (binding [*app-ctx* (rope/make-framework-context
                        {:schema      {:user/handle      {:db/unique :db.unique/identity}
                                       :user/birth-name  {:db/unique :db.unique/identity}
-                                      :user/power-level {}}
+                                      :user/power-level {}
+                                      :user/friends      {:db/valueType   :db.type/ref
+                                                          :db/cardinality :db.cardinality/many}}
                         :parser-opts {:resolvers [greeting-resolver]}
                         :remote      {}})]
     (ds/transact! (:conn *app-ctx*) [{:user/handle      "goku"
                                       :user/birth-name  "kakarot"
-                                      :user/power-level 9001}])
+                                      :user/power-level 9001
+                                      :user/friends "1"}
+                                     {:db/id "1"
+                                      :user/handle "krillin"}])
     (f)))
 
 (use-fixtures :each app-ctx-fixture)
@@ -58,10 +63,20 @@
 
 (deftest pull-known-includes-only-keys-in-schema
   (ds/transact! (:conn *app-ctx*) [{:user/handle   "goku"
-                                    :not-in-schema 42}])
-  (is (= (rope/pull-known (-> *app-ctx* :conn ds/db) '[:user/handle :user/power-level :not-in-schema] 1)
-         {:user/handle "goku"
-          :user/power-level 9001}))
-  (is (= (rope/try-pull (-> *app-ctx* :conn ds/db) '[:user/handle :not-in-schema] 1)
-         {:user/handle "goku"
-          :not-in-schema 42})))
+                                    :not-in-schema 42}
+                                   {:user/handle   "krillin"
+                                    :not-in-schema 100}])
+  (is (= (rope/pull-known (-> *app-ctx* :conn ds/db) '[:not-in-schema
+                                                       :user/power-level
+                                                       {:user/friends [:user/handle
+                                                                       :not-in-schema]}] 1)
+         {:user/power-level 9001
+          :user/friends     [{:user/handle "krillin"}]}))
+  (is (= (rope/try-pull (-> *app-ctx* :conn ds/db) '[:not-in-schema
+                                                     :user/power-level
+                                                     {:user/friends [:user/handle
+                                                                     :not-in-schema]}] 1)
+         {:not-in-schema    42
+          :user/power-level 9001
+          :user/friends [{:user/handle   "krillin"
+                          :not-in-schema 100}]})))

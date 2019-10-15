@@ -1,9 +1,17 @@
-(ns tightrope.schema)
+(ns tightrope.schema
+  (:require [clojure.walk :as walk]))
 
 (defn select-schema-keys
+  "Prunes the keys of e to only include those defined in the given datascript schema.
+  Acts recursively on map values."
   [ds-schema e]
-  (select-keys e
-               (conj (keys ds-schema) :db/id)))
+  (let [schema-keys (conj (keys ds-schema) :db/id)
+        sel-schema-keys #(select-keys % schema-keys)]
+    (walk/postwalk (fn [m]
+                     (if (map? m)
+                       (sel-schema-keys m)
+                       m))
+                   e)))
 
 (defn datomic->datascript
   "Converts a datomic schema into its equivalent datascript schema."
