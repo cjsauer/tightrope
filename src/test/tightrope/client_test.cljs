@@ -43,14 +43,6 @@
     (is (= "Welcome, goku!"
            (:user/greeting result)))))
 
-(deftest known-lookups-are-injected-into-query-results
-  (let [result (rope/q *app-ctx* [:user/handle "goku"] [:user/power-level])]
-    (is (= result
-           {:db/id            1
-            :user/handle      "goku"
-            :user/birth-name  "kakarot"
-            :user/power-level 9001}))))
-
 (deftest upsertion-is-the-new-data-plus-lookup
   (is (= (rope/upsertion [:user/handle "goku"] {:user/appetite :insatiable})
          {:user/handle     "goku"
