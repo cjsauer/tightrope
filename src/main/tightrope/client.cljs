@@ -16,8 +16,10 @@
   [e & idents]
   (loop [k (first idents)]
     (when k
-      (if (contains? e k)
-        [k (get e k)]
+      (if-let [v (get e k)]
+        [k (if (coll? v)
+             (first v)
+             v)]
         (recur (first (next idents)))))))
 
 (defn eids->lookups
@@ -28,17 +30,6 @@
           [(= ?avalue :db.unique/identity)]
           [?eids ?attr ?value]]
         db (:schema db) eids))
-
-(defn with-known-lookups
-  [db e]
-  (if-let [eid (:db/id e)]
-    (let [lookups (eids->lookups db eid)]
-      (into e lookups))
-    e))
-
-(defn with-all-known-lookups
-  [db e]
-  (wlk/postwalk (partial with-known-lookups db) e))
 
 (defn try-pull
   [db selector eid]
@@ -85,7 +76,7 @@
          full-query   [{lookup query*}]
          parse-result (parser parse-env full-query)
          result       (get parse-result lookup)]
-     (with-all-known-lookups db result))))
+     result)))
 
 ;; Re-export of remote query
 (def q+ remote/q)
