@@ -189,8 +189,10 @@
 (defn- derive-lookup
   [props opts]
   (or (props-or-opts props opts :lookup)
-      (let [idents (:idents opts)]
-        (apply entity->lookup props idents))))
+      (let [idents        (:idents opts)
+            mount-tx      (:mount-tx opts)
+            assumed-props (merge props mount-tx)]
+        (apply entity->lookup assumed-props idents))))
 
 (defn- parse-state
   [state & [opts]]
@@ -217,7 +219,7 @@
                                       query] :as ctx} (parse-state state opts)
                               rerender-fn #(rum/request-render react-component)]
                           (when mount-tx
-                            (ds/transact! conn mount-tx))
+                            (ds/transact! conn [mount-tx]))
                           (if lookup
                             (do (swap! registry add-fn-to-registry lookup rerender-fn)
                                 (when (and freshen? lookup query)
@@ -244,8 +246,10 @@
                         (let [{:keys [conn
                                       parser
                                       lookup
+                                      query
                                       props] :as ctx} (parse-state state opts)
-                              data       (q ctx)
+                              data       (when (and lookup query)
+                                           (q ctx))
                               upsert!    (partial upsert! conn lookup)
                               q          (partial q ctx)
                               q+         (partial q+ ctx)
