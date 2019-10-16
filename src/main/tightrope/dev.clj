@@ -2,7 +2,11 @@
   (:require [datomic.ion.dev :as ion-dev]))
 
 (defn ion-release
-  "Push and deploy ion application."
+  "Push and deploy ion application. args is a map of:
+    - `:region` aws region
+    - `:creds-profile` aws creds profile
+    - `:group` name of datomic compute group
+    - `:uname` (optional) unreproducible build name"
   [args]
   (try
     (let [push-data   (ion-dev/push args)
