@@ -5,9 +5,7 @@
             [datascript.core :as ds]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
-            [tightrope.remote :as remote]
-            [tightrope.schema :as rope-schema]
-            [clojure.walk :as wlk]))
+            [tightrope.remote :as remote]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Utilities
@@ -37,11 +35,6 @@
     (ds/pull db selector eid)
     (catch :default e nil)))
 
-(defn pull-known
-  [db selector eid]
-  (->> (try-pull db selector eid)
-       (rope-schema/select-schema-keys (:schema db))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; upsert
 
@@ -59,6 +52,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; query
 
+(defn- prune-query
+  "Prunes the given query by eliding all keys in key-blacklist recursively"
+  [query key-blacklist]
+  (-> query
+      p/query->ast
+      (p/elide-ast-nodes key-blacklist)
+      p/ast->query))
+
+(defn- pull-resolverless
+  "Pulls from the database, excluding keys that are output by any registered
+  resolver (including mutations)."
+  [{:keys [parser-opts]} db query lookup]
+  (let [xform        (mapcat (comp :com.wsscode.pathom.connect/output))
+        output-keys  (into #{} xform (:resolvers parser-opts))
+        pruned-query (prune-query query output-keys)]
+    (try-pull db pruned-query lookup)))
+
 (defn q
   ([ctx]
    (q ctx (:lookup ctx) (:query ctx)))
@@ -66,10 +76,10 @@
   ([ctx target]
    (q ctx (:lookup target) (:query target)))
   ;; ---------------------------------------------
-  ([{:keys [conn parser]} lookup query]
+  ([{:keys [conn parser] :as ctx} lookup query]
    (let [db           (ds/db conn)
          query*       (conj query :db/id)
-         pull-result  (pull-known db query* lookup)
+         pull-result  (pull-resolverless ctx db query* lookup)
          pull-result? (-> pull-result (dissoc :db/id) seq)
          parse-env    (cond-> {:conn conn}
                         pull-result? (assoc ::p/entity {lookup pull-result}))
@@ -172,9 +182,7 @@
 
 (defn- get-ctx
   [{:rum/keys [react-component]}]
-  (js->clj
-   (.-context react-component)
-   :keywordize-keys true))
+  (.-context react-component))
 
 (defn- get-props
   [state]
@@ -322,15 +330,16 @@
   (let [conn     (-> schema enrich-schema ds/create-conn)
         registry (atom {})]
     (ds/listen! conn ::listener (partial on-tx registry))
-    {:conn     conn
-     :registry registry
-     :parser   (or (:parser ctx)
-                   (default-parser parser-opts))
-     :remote   remote
+    {:conn        conn
+     :registry    registry
+     :parser      (or (:parser ctx)
+                      (default-parser parser-opts))
+     :parser-opts parser-opts
+     :remote      remote
      }))
 
 (defn ctx-provider
   [ctx & children]
   (let [provider      (.-Provider TightropeContext)
-        props         (clj->js {:value ctx})]
+        props         #js {:value ctx}]
     (apply react/createElement provider props children)))

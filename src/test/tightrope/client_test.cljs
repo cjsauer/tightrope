@@ -53,22 +53,14 @@
          #{[:user/birth-name "kakarot"]
            [:user/handle "goku"]})))
 
-(deftest pull-known-includes-only-keys-in-schema
-  (ds/transact! (:conn *app-ctx*) [{:user/handle   "goku"
-                                    :not-in-schema 42}
-                                   {:user/handle   "krillin"
-                                    :not-in-schema 100}])
-  (is (= (rope/pull-known (-> *app-ctx* :conn ds/db) '[:not-in-schema
-                                                       :user/power-level
-                                                       {:user/friends [:user/handle
-                                                                       :not-in-schema]}] 1)
-         {:user/power-level 9001
-          :user/friends     [{:user/handle "krillin"}]}))
-  (is (= (rope/try-pull (-> *app-ctx* :conn ds/db) '[:not-in-schema
-                                                     :user/power-level
-                                                     {:user/friends [:user/handle
-                                                                     :not-in-schema]}] 1)
-         {:not-in-schema    42
-          :user/power-level 9001
-          :user/friends [{:user/handle   "krillin"
-                          :not-in-schema 100}]})))
+(def pull-resolverless #'tightrope.client/pull-resolverless)
+
+(deftest pull-resolverless-includes-only-keys-not-output-by-resolvers
+  (ds/transact! (:conn *app-ctx*) [{:user/handle "goku"}
+                                   {:user/handle "krillin"}])
+  (is (= (pull-resolverless *app-ctx*
+                            (-> *app-ctx* :conn ds/db)
+                            '[:user/greeting
+                              {:user/friends [:user/handle :user/greeting]}]
+                            1)
+         {:user/friends [{:user/handle "krillin"}]})))
