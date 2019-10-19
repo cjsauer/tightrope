@@ -168,8 +168,11 @@
 ;;     - allows for duplicate datoms being sent
 ;;     - complicates unsubscribe (requires reference counting)
 
+(def schan (atom nil))
+
 (defn- ws-loop!
   [ctx server-chan]
+  (reset! schan server-chan)
   (go-loop []
     (let [{:keys [message error]} (<! server-chan)]
       (prn message error)
