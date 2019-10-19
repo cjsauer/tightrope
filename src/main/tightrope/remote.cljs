@@ -2,7 +2,8 @@
   (:require [cljs-http.client :as http]
             [cljs.core.async :as a :refer [go go-loop <! >!]]
             [datascript.core :as ds]
-            [goog.functions :as gfn]))
+            [goog.functions :as gfn]
+            [chord.client :as chord]))
 
 ;; TODO: encoding should be set at the config level under the :remote key
 (def ^:private http-params-key :edn-params)
@@ -148,3 +149,29 @@
          :default       (throw (ex-info "Mutation responded with non-200 status"
                                         {:request  req
                                          :response response})))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; WebSockets
+
+(defn- ws-loop!
+  [ctx server-chan]
+  (go-loop []
+    (let [{:keys [message error]} (<! server-chan)]
+      (if error
+        ;; handle error
+        (js/console.error error)
+        ;; handle message
+        (do
+          (prn message)
+          (recur))))))
+
+(defn install-websockets!
+  [{:keys [remote] :as ctx}]
+  (set! (.-onload js/window)
+        (fn []
+          (go
+            (let [{:keys [ws-channel error]} (<! (chord/ws-ch (:ws-uri remote)))]
+              (prn "Tightrope websocket connected")
+              (if error
+                (js/console.error error)
+                (ws-loop! ctx ws-channel)))))))

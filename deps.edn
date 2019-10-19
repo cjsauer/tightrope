@@ -1,25 +1,25 @@
 {:paths ["src/main"]
 
  :deps {rum                        {:mvn/version "0.11.3"}
-        datascript                 {:mvn/version "0.18.4"}
+        cheshire                   {:mvn/version "5.9.0"}
         cljs-http                  {:mvn/version "0.1.46"}
         compojure                  {:mvn/version "1.6.1"}
-        cheshire                   {:mvn/version "5.9.0"}
-        metosin/muuntaja           {:mvn/version "0.6.4"}
-        org.clojure/core.async     {:mvn/version "0.4.500"}
+        datascript                 {:mvn/version "0.18.4"}
+        jarohen/chord              {:mvn/version "0.8.1"}
         com.datomic/ion            {:mvn/version "0.9.35"}
+        metosin/muuntaja           {:mvn/version "0.6.4"}
         com.wsscode/pathom         {:mvn/version "2.2.25"}
-        com.wsscode/pathom-datomic {:git/url "https://github.com/wilkerlucio/pathom-datomic"
-                                    :sha     "23e23ac8ae96dba5461cd020879d896c355f65d3"}
+        org.clojure/core.async     {:mvn/version "0.4.500"}
         cjsauer/pathom-datascript  {:git/url "https://github.com/cjsauer/pathom-datascript.git"
                                     :sha     "4745f0b4485dfd0c43ab69ff36c18d17301f9b13"}
+        com.wsscode/pathom-datomic {:git/url "https://github.com/wilkerlucio/pathom-datomic"
+                                    :sha     "23e23ac8ae96dba5461cd020879d896c355f65d3"}
         }
 
  :mvn/repos {"datomic-cloud" {:url "s3://datomic-releases-1fc2183a/maven/releases"}}
 
  :aliases
- {:v1.10.1  {:extra-deps {org.clojure/clojure {:mvn/version "1.10.1"}}}
-  :dev      {:extra-paths ["src/dev" "src/test"]
+ {:dev      {:extra-paths ["src/dev" "src/test"]
              :extra-deps  {thheller/shadow-cljs     {:mvn/version "2.8.56"}
                            com.datomic/client-cloud {:mvn/version "0.8.78"}
                            com.datomic/ion-dev      {:mvn/version "0.9.234"}}}

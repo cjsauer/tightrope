@@ -307,15 +307,17 @@
 (defn make-framework-context
   [{:keys [schema parser-opts remote] :as ctx}]
   (let [conn     (-> schema enrich-schema ds/create-conn)
-        registry (atom {})]
+        registry (atom {})
+        ctx      {:conn        conn
+                  :registry    registry
+                  :parser      (or (:parser ctx)
+                                   (make-parser conn parser-opts))
+                  :parser-opts parser-opts
+                  :remote      remote}]
     (ds/listen! conn ::listener (partial on-tx registry))
-    {:conn        conn
-     :registry    registry
-     :parser      (or (:parser ctx)
-                      (make-parser conn parser-opts))
-     :parser-opts parser-opts
-     :remote      remote
-     }))
+    (when (:ws-uri remote)
+      (remote/install-websockets! ctx))
+    ctx))
 
 (defn ctx-provider
   [ctx & children]
