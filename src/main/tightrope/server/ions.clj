@@ -61,25 +61,25 @@
 ;; WebSocket handling
 
 (defn on-connect*
-  [{:keys [input event]}]
-  (let [payload (json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketConnectEvent" ::input input ::event event})
+  [input]
+  (let [#_payload #_(json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketConnectEvent" ::input (str input)})
     {:status 200
      :body   "connected"}))
 (def on-connect (apigw/ionize on-connect*))
 
 (defn on-disconnect*
-  [{:keys [input event]}]
-  (let [payload (json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input input ::event event})
+  [input]
+  (let [#_payload #_(json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input (str input)})
     {:status 200
      :body   "disconnected"}))
 (def on-disconnect (apigw/ionize on-disconnect*))
 
 (defn on-message*
-  [{:keys [input event]}]
-  (let [payload (json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input input ::event event})
+  [input]
+  (let [#_payload #_(json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input)})
     {:status 200
      :body   "message receieved"}))
 (def on-message (apigw/ionize on-message*))
