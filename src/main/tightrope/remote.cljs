@@ -153,6 +153,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WebSockets
 
+;; subscribe!
+;; - given a lookup only (no query)
+;; - backend stores backend-eid -> connection
+;;   - this precludes subscribing to soon-to-exist entities...
+;; - backend sends all datoms matching eid to subscribed connections
+;;
+;; unsubscribe!
+;; - dissoc backend-eid -> connection from backend store
+;;
+;; - surprisingly similar to the lookup -> rerender-fn map
+;;   - should this actually be client-eid -> rrf ?
+;; - lookup -> connection is naive
+;;   - several lookups can resolve to the same entity
+;;     - allows for duplicate datoms being sent
+;;     - complicates unsubscribe (requires reference counting)
+
 (defn- ws-loop!
   [ctx server-chan]
   (go-loop []
@@ -171,7 +187,7 @@
         (fn []
           (go
             (let [{:keys [ws-channel error]} (<! (chord/ws-ch (:ws-uri remote)))]
-              (prn "Tightrope websocket connected")
+              (println "tightrope: WebSocket connected!")
               (if error
                 (js/console.error error)
                 (ws-loop! ctx ws-channel)))))))

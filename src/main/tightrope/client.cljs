@@ -286,7 +286,6 @@
                  env)
     ::p/mutate  pc/mutate
     ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
-                 ;; TODO: insert pathom-datascript plugin here, and watch the code melt away :)
                  (pcd/datascript-connect-plugin {::pcd/conn conn})
                  p/error-handler-plugin
                  p/elide-special-outputs-plugin
