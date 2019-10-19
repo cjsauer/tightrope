@@ -2,6 +2,7 @@
   (:require [cheshire.core :as json]
             [datomic.client.api :as d]
             [datomic.ion.cast :as icast]
+            [datomic.ion.lambda.api-gateway :as apigw]
             [tightrope.server.handler :as handler]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
@@ -59,7 +60,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WebSocket handling
 
-(defn on-connect
+(defn on-connect*
   [{:keys [input]}]
   (let [payload (json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketEvent" :payload payload})))
+    (icast/event {:msg "TightropeWebSocketConnectEvent" :payload payload})
+    {:status 200
+     :body   "connected"}))
+(def on-connect (apigw/ionize on-connect*))
+
+(defn on-disconnect*
+  [{:keys [input]}]
+  (let [payload (json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketDisconnectEvent" :payload payload})
+    {:status 200
+     :body   "disconnected"}))
+(def on-disconnect (apigw/ionize on-disconnect*))
+
+(defn on-message*
+  [{:keys [input]}]
+  (let [payload (json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketMessageEvent" :payload payload})
+    {:status 200
+     :body   "message receieved"}))
+(def on-message (apigw/ionize on-message*))
