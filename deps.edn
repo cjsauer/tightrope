@@ -4,6 +4,7 @@
         datascript                 {:mvn/version "0.18.4"}
         cljs-http                  {:mvn/version "0.1.46"}
         compojure                  {:mvn/version "1.6.1"}
+        cheshire                   {:mvn/version "5.9.0"}
         metosin/muuntaja           {:mvn/version "0.6.4"}
         org.clojure/core.async     {:mvn/version "0.4.500"}
         com.datomic/ion            {:mvn/version "0.9.35"}

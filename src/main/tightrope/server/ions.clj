@@ -1,5 +1,7 @@
 (ns tightrope.server.ions
-  (:require [datomic.client.api :as d]
+  (:require [cheshire.core :as json]
+            [datomic.client.api :as d]
+            [datomic.ion.cast :as icast]
             [tightrope.server.handler :as handler]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
@@ -53,3 +55,11 @@
                            (update-in [:parser-opts :env] merge env)
                            (update-in [:parser-opts :plugins] (fnil concat []) plugins))]
     (handler/tightrope-handler merged-config)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; WebSocket handling
+
+(defn on-connect
+  [{:keys [input]}]
+  (let [payload (json/parse-string input keyword)]
+    (icast/event {:msg "TightropeWebSocketEvent" :payload payload})))
