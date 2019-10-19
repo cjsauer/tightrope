@@ -52,15 +52,3 @@
   (is (= (rope/eids->lookups (-> *app-ctx* :conn ds/db) 1)
          #{[:user/birth-name "kakarot"]
            [:user/handle "goku"]})))
-
-(def pull-resolverless #'tightrope.client/pull-resolverless)
-
-(deftest pull-resolverless-includes-only-keys-not-output-by-resolvers
-  (ds/transact! (:conn *app-ctx*) [{:user/handle "goku"}
-                                   {:user/handle "krillin"}])
-  (is (= (pull-resolverless *app-ctx*
-                            (-> *app-ctx* :conn ds/db)
-                            '[:user/greeting
-                              {:user/friends [:user/handle :user/greeting]}]
-                            1)
-         {:user/friends [{:user/handle "krillin"}]})))

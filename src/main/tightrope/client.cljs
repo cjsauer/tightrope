@@ -3,6 +3,7 @@
   (:require ["react" :as react]
             [rum.core :as rum]
             [datascript.core :as ds]
+            [cjsauer.pathom.connect.datascript :as pcd]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
             [tightrope.remote :as remote]))
@@ -52,23 +53,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; query
 
-(defn- prune-query
-  "Prunes the given query by eliding all keys in key-blacklist recursively"
-  [query key-blacklist]
-  (-> query
-      p/query->ast
-      (p/elide-ast-nodes key-blacklist)
-      p/ast->query))
-
-(defn- pull-resolverless
-  "Pulls from the database, excluding keys that are output by any registered
-  resolver (including mutations)."
-  [{:keys [parser-opts]} db query lookup]
-  (let [xform        (mapcat (comp :com.wsscode.pathom.connect/output))
-        output-keys  (into #{} xform (:resolvers parser-opts))
-        pruned-query (prune-query query output-keys)]
-    (try-pull db pruned-query lookup)))
-
 (defn q
   ([ctx]
    (q ctx (:lookup ctx) (:query ctx)))
@@ -77,16 +61,9 @@
    (q ctx (:lookup target) (:query target)))
   ;; ---------------------------------------------
   ([{:keys [conn parser] :as ctx} lookup query]
-   (let [db           (ds/db conn)
-         query*       (conj query :db/id)
-         pull-result  (pull-resolverless ctx db query* lookup)
-         pull-result? (-> pull-result (dissoc :db/id) seq)
-         parse-env    (cond-> {:conn conn}
-                        pull-result? (assoc ::p/entity {lookup pull-result}))
-         full-query   [{lookup query*}]
-         parse-result (parser parse-env full-query)
-         result       (get parse-result lookup)]
-     result)))
+   (let [full-query   [{lookup query}]
+         parse-result (parser {} full-query)]
+     (get parse-result lookup))))
 
 ;; Re-export of remote query
 (def q+ remote/q)
@@ -297,8 +274,8 @@
     (doseq [rrf rerender-fns]
       (rrf))))
 
-(defn- default-parser
-  [{:keys [resolvers env] :as opts}]
+(defn- make-parser
+  [conn {:keys [resolvers env] :as opts}]
   (p/parser
    {::p/env     (merge
                  {::p/reader               [p/map-reader
@@ -309,6 +286,8 @@
                  env)
     ::p/mutate  pc/mutate
     ::p/plugins [(pc/connect-plugin {::pc/register (or resolvers [])})
+                 ;; TODO: insert pathom-datascript plugin here, and watch the code melt away :)
+                 (pcd/datascript-connect-plugin {::pcd/conn conn})
                  p/error-handler-plugin
                  p/elide-special-outputs-plugin
                  p/trace-plugin]}))
@@ -333,7 +312,7 @@
     {:conn        conn
      :registry    registry
      :parser      (or (:parser ctx)
-                      (default-parser parser-opts))
+                      (make-parser conn parser-opts))
      :parser-opts parser-opts
      :remote      remote
      }))
