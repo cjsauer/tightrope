@@ -163,7 +163,6 @@
 ;; - dissoc backend-eid -> connection from backend store
 ;;
 ;; - surprisingly similar to the lookup -> rerender-fn map
-;;   - should this actually be client-eid -> rrf ?
 ;; - lookup -> connection is naive
 ;;   - several lookups can resolve to the same entity
 ;;     - allows for duplicate datoms being sent
@@ -173,13 +172,9 @@
   [ctx server-chan]
   (go-loop []
     (let [{:keys [message error]} (<! server-chan)]
-      (if error
-        ;; handle error
-        (js/console.error error)
-        ;; handle message
-        (do
-          (prn message)
-          (recur))))))
+      (prn message error)
+      (when message
+        (recur)))))
 
 (defn install-websockets!
   [{:keys [remote] :as ctx}]
