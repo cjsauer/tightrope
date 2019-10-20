@@ -63,7 +63,10 @@
 ;; WebSocket handling
 
 (def apigwm (aws/client {:api    :apigatewaymanagementapi
-                         :region "us-east-1"}))
+                         :region "us-east-1"
+                         :endpoint-override (str "7ps9rxk22d.execute-api.us-east-1.amazonaws.com"
+                                                 "/"
+                                                 "dev")}))
 
 (defn send-message!
   [msg connIds]
@@ -104,10 +107,13 @@
 (comment
   (aws/ops apigwm)
 
-  (let [connId "B3MyOfoqoAMCESQ="]
-    (aws/invoke apigwm {:op :GetConnection
+  (let [connId "B3aOsddpoAMCE7A="]
+    (aws/invoke apigwm {:op      :GetConnection
+                        :request {:ConnectionId connId}}))
+
+  (let [connId "B3aOsddpoAMCE7A="]
+    (aws/invoke apigwm {:op      :PostToConnection
                         :request {:ConnectionId connId
-                                  :Data (str {:echo "hello"})
-                                  }}))
+                                  :Data (str "HELLO")}}))
 
   )
