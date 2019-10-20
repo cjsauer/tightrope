@@ -3,11 +3,13 @@
             [datomic.client.api :as d]
             [datomic.ion.cast :as icast]
             [datomic.ion.lambda.api-gateway :as apigw]
+            [datomic.ion.edn.api-gateway :as edngw]
             [tightrope.server.handler :as handler]
             [com.wsscode.pathom.core :as p]
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.client :refer [client-config]]
+            [cognitect.aws.client.api :as aws]
             ))
 
 (def get-client
@@ -60,26 +62,50 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WebSocket handling
 
+(def apigwm (aws/client {:api    :apigatewaymanagementapi
+                         :region "us-east-1"}))
+
+(defn send-message!
+  [msg connIds]
+  (when (seq connIds)
+    (doseq [id connIds]
+      (aws/invoke apigwm {:op :GetConnection
+                          :request {:ConnectionId id
+                                    :Data (str msg)
+                                    }}))))
+
 (defn on-connect*
-  [input]
-  (let [#_payload #_(json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketConnectEvent" ::input (str input)})
+  [{::edngw/keys [data]}]
+  (let [{:keys [connectionId]} (:requestContext data)]
+    (icast/event {:msg "TightropeWebSocketConnectEvent" ::data data})
     {:status 200
      :body   "connected"}))
 (def on-connect (apigw/ionize on-connect*))
 
 (defn on-disconnect*
-  [input]
-  (let [#_payload #_(json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input (str input)})
+  [{::edngw/keys [data]}]
+  (let [{:keys [connectionId]} (:requestContext data)]
+    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::data data})
     {:status 200
      :body   "disconnected"}))
 (def on-disconnect (apigw/ionize on-disconnect*))
 
 (defn on-message*
-  [input]
-  (let [#_payload #_(json/parse-string input keyword)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input)})
+  [{:edngw/keys [data]}]
+  (let [{:keys [connectionId body]} (:requestContext data)]
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::data data})
+    (send-message! data [connectionId])
     {:status 200
      :body   "message receieved"}))
 (def on-message (apigw/ionize on-message*))
+
+(comment
+  (aws/ops apigwm)
+
+  (let [connId "B3MyOfoqoAMCESQ="]
+    (aws/invoke apigwm {:op :GetConnection
+                        :request {:ConnectionId connId
+                                  :Data (str {:echo "hello"})
+                                  }}))
+
+  )
