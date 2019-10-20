@@ -69,6 +69,7 @@
   [msg connIds]
   (when (seq connIds)
     (doseq [id connIds]
+      ;; TODO: try/catch to remove bad connections
       (aws/invoke apigwm {:op :GetConnection
                           :request {:ConnectionId id
                                     :Data (str msg)
@@ -91,9 +92,9 @@
 (def on-disconnect (apigw/ionize on-disconnect*))
 
 (defn on-message*
-  [{:edngw/keys [data]}]
+  [{:edngw/keys [data] :as input}]
   (let [{:keys [connectionId body]} (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::data data})
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data})
     (send-message! data [connectionId])
     {:status 200
      :body   "message receieved"}))

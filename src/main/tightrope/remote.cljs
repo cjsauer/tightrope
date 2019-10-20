@@ -175,8 +175,10 @@
   (reset! schan server-chan)
   (go-loop []
     (let [{:keys [message error]} (<! server-chan)]
-      (prn message error)
+      (when error
+        (js/console.warn error))
       (when message
+        (prn (js/atob message))
         (recur)))))
 
 (defn install-websockets!
