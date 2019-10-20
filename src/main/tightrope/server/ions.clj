@@ -70,9 +70,9 @@
   (when (seq connIds)
     (doseq [id connIds]
       ;; TODO: try/catch to remove bad connections
-      (aws/invoke apigwm {:op :GetConnection
+      (aws/invoke apigwm {:op      :PostToConnection
                           :request {:ConnectionId id
-                                    :Data (str msg)
+                                    :Data         (str msg)
                                     }}))))
 
 (defn on-connect*
@@ -95,8 +95,8 @@
   [input]
   (let [data                        (::edngw/data input)
         {:keys [connectionId body]} (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data ::keys (str (keys input))})
-    (send-message! data [connectionId])
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data})
+    (send-message! body [connectionId])
     {:status 200
      :body   "message receieved"}))
 (def on-message (apigw/ionize on-message*))
