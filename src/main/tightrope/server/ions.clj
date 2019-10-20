@@ -93,8 +93,8 @@
 
 (defn on-message*
   [input]
-  (let [data                        (::edngw/data input)
-        {:keys [connectionId body]} (:requestContext data)]
+  (let [{:keys [body] :as data} (::edngw/data input)
+        {:keys [connectionId]}  (:requestContext data)]
     (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data})
     (send-message! body [connectionId])
     {:status 200
