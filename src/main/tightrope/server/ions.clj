@@ -92,9 +92,10 @@
 (def on-disconnect (apigw/ionize on-disconnect*))
 
 (defn on-message*
-  [{:edngw/keys [data] :as input}]
-  (let [{:keys [connectionId body]} (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data})
+  [input]
+  (let [data                        (::edngw/data input)
+        {:keys [connectionId body]} (:requestContext data)]
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data ::keys (str (keys input))})
     (send-message! data [connectionId])
     {:status 200
      :body   "message receieved"}))
