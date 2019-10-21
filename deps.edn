@@ -1,22 +1,20 @@
 {:paths ["src/main"]
 
- :deps {rum                                       {:mvn/version "0.11.3"}
-        cheshire                                  {:mvn/version "5.9.0"}
-        cljs-http                                 {:mvn/version "0.1.46"}
-        compojure                                 {:mvn/version "1.6.1"}
-        datascript                                {:mvn/version "0.18.4"}
-        jarohen/chord                             {:mvn/version "0.8.1"}
-        com.datomic/ion                           {:mvn/version "0.9.35"}
-        metosin/muuntaja                          {:mvn/version "0.6.4"}
-        com.wsscode/pathom                        {:mvn/version "2.2.25"}
-        org.clojure/core.async                    {:mvn/version "0.4.500"}
-        cjsauer/pathom-datascript                 {:git/url "https://github.com/cjsauer/pathom-datascript.git"
-                                                   :sha     "4745f0b4485dfd0c43ab69ff36c18d17301f9b13"}
-        com.wsscode/pathom-datomic                {:git/url "https://github.com/wilkerlucio/pathom-datomic"
-                                                   :sha     "23e23ac8ae96dba5461cd020879d896c355f65d3"}
-        com.cognitect.aws/api                     {:mvn/version "0.8.378"}
-        com.cognitect.aws/endpoints               {:mvn/version "1.1.11.655"}
-        com.cognitect.aws/apigatewaymanagementapi {:mvn/version "746.2.533.0"}
+ :deps {rum                                            {:mvn/version "0.11.3"}
+        cheshire                                       {:mvn/version "5.9.0"}
+        cljs-http                                      {:mvn/version "0.1.46"}
+        compojure                                      {:mvn/version "1.6.1"}
+        datascript                                     {:mvn/version "0.18.4"}
+        jarohen/chord                                  {:mvn/version "0.8.1"}
+        com.datomic/ion                                {:mvn/version "0.9.35"}
+        metosin/muuntaja                               {:mvn/version "0.6.4"}
+        com.wsscode/pathom                             {:mvn/version "2.2.25"}
+        org.clojure/core.async                         {:mvn/version "0.4.500"}
+        cjsauer/pathom-datascript                      {:git/url "https://github.com/cjsauer/pathom-datascript.git"
+                                                        :sha     "4745f0b4485dfd0c43ab69ff36c18d17301f9b13"}
+        com.wsscode/pathom-datomic                     {:git/url "https://github.com/wilkerlucio/pathom-datomic"
+                                                        :sha     "23e23ac8ae96dba5461cd020879d896c355f65d3"}
+        software.amazon.awssdk/apigatewaymanagementapi {:mvn/version "2.9.24"}
         }
 
  :mvn/repos {"datomic-cloud" {:url "s3://datomic-releases-1fc2183a/maven/releases"}}

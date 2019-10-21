@@ -178,7 +178,7 @@
       (when error
         (js/console.warn error))
       (when message
-        (prn (js/atob message))
+        (prn message)
         (recur)))))
 
 (defn install-websockets!

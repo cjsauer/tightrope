@@ -9,8 +9,16 @@
             [com.wsscode.pathom.connect :as pc]
             [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.client :refer [client-config]]
-            [cognitect.aws.client.api :as aws]
-            ))
+            )
+  (:import [java.net URI]
+           [software.amazon.awssdk.services.apigatewaymanagementapi
+            ApiGatewayManagementApiClient
+            ApiGatewayManagementApiAsyncClient
+            ApiGatewayManagementApiAsyncClientBuilder]
+           [software.amazon.awssdk.services.apigatewaymanagementapi.model
+            GetConnectionRequest
+            PostToConnectionRequest]
+           [software.amazon.awssdk.core SdkBytes]))
 
 (def get-client
   (memoize #(d/client %)))
@@ -62,17 +70,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WebSocket handling
 
-(def apigwm (aws/client {:api    :apigatewaymanagementapi
-                         :region "us-east-1"
-                         :endpoint-override (str "7ps9rxk22d.execute-api.us-east-1.amazonaws.com"
-                                                 "/"
-                                                 "dev")}))
+;; (def apigwm (aws/client {:api    :apigatewaymanagementapi
+;;                          :region "us-east-1"
+;;                          :endpoint-override (str "7ps9rxk22d.execute-api.us-east-1.amazonaws.com"
+;;                                                  "/"
+;;                                                  "dev")}))
 
 (defn send-message!
   [msg connIds]
   (doseq [id connIds]
     ;; TODO: try/catch to remove bad connections
-    (aws/invoke apigwm {:op      :PostToConnection
+    #_(aws/invoke apigwm {:op      :PostToConnection
                         :request {:ConnectionId id
                                   :Data         (str msg)
                                   }})))
@@ -105,15 +113,15 @@
 (def on-message (apigw/ionize on-message*))
 
 (comment
-  (aws/ops apigwm)
 
-  (let [connId "B3aOsddpoAMCE7A="]
-    (aws/invoke apigwm {:op      :GetConnection
-                        :request {:ConnectionId connId}}))
-
-  (let [connId "B3aOsddpoAMCE7A="]
-    (aws/invoke apigwm {:op      :PostToConnection
-                        :request {:ConnectionId connId
-                                  :Data (str "HELLO")}}))
+  (let [uri    (URI. (str "https://7ps9rxk22d.execute-api.us-east-1.amazonaws.com" "/" "dev"))
+        client (.. (ApiGatewayManagementApiClient/builder)
+                   (endpointOverride uri)
+                   (build))
+        request (.. (PostToConnectionRequest/builder)
+                    (connectionId "B3vOJdSdoAMCKIA=")
+                    (data (bytes "hello"))
+                    (build))]
+    (.postToConnection client request))
 
   )
