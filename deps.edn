@@ -4,7 +4,7 @@
         cheshire                                       {:mvn/version "5.9.0"}
         cljs-http                                      {:mvn/version "0.1.46"}
         compojure                                      {:mvn/version "1.6.1"}
-        datascript                                     {:mvn/version "0.18.4"}
+        datascript                                     {:mvn/version "0.18.7"}
         jarohen/chord                                  {:mvn/version "0.8.1"}
         com.datomic/ion                                {:mvn/version "0.9.35"}
         metosin/muuntaja                               {:mvn/version "0.6.4"}
