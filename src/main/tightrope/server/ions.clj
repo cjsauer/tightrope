@@ -1,12 +1,9 @@
 (ns tightrope.server.ions
-  (:require [cheshire.core :as json]
-            [tightrope.server.handler :as handler]
-            [tightrope.server.ions.remote :as remote]
-            [com.wsscode.pathom.core :as p]
-            [com.wsscode.pathom.connect :as pc]
-            [com.wsscode.pathom.connect.datomic :as pcd]
+  (:require [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.client :refer [client-config]]
-            ))
+            [datomic.client.api :as d]
+            [tightrope.server.handler :as handler]
+            [tightrope.server.ions.remote :as remote]))
 
 (def built-in-schemas
   [remote/connection-schema])
