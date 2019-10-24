@@ -116,10 +116,15 @@
           {}
           datoms))
 
+(defn- encode-data
+  [data]
+  ;; TODO encode this with something other than str
+  (-> data pr-str .getBytes SdkBytes/fromByteArray))
+
 (defn send-data!
   [conn-id msg]
   (let [uri       (URI. (str "https://7ps9rxk22d.execute-api.us-east-1.amazonaws.com" "/" "dev"))
-        msg-bytes (-> msg str bytes) ;; TODO encode this with something other than str
+        msg-bytes (encode-data msg)
         client    (.. (ApiGatewayManagementApiClient/builder)
                       (endpointOverride uri)
                       (build))
@@ -146,6 +151,10 @@
 (comment
 
   (subscribe-tx nil "c1" [:ident 1] [:ident 2])
+
+  (encode-data {:test "hello"})
+
+  (send-data! "CFuMWelHIAMCEpw=" {:test "hello"})
 
   (let [;; simulate the ::connections avet index
         connections {"c1" #{1 2}
@@ -190,8 +199,3 @@
     {:status 200
      :body   "message receieved"}))
 (def on-message (apigw/ionize on-message*))
-
-(comment
-
-
-  )

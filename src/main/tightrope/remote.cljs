@@ -173,6 +173,7 @@
           (go
             (let [{:keys [ws-channel error]} (<! (chord/ws-ch (:ws-uri remote)))]
               (println "tightrope: WebSocket connected!")
+              (>! ws-channel "hello")
               (if error
                 (js/console.error error)
                 (ws-loop! ctx ws-channel)))))))
