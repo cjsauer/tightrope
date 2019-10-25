@@ -143,7 +143,7 @@
   (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
     (icast/event {:msg "TightropeWebSocketConnectEvent" ::input input})
     ;; inform client of its unique connectionId
-    (send-data! config conn-id {:conn-id conn-id})
+    #_(send-data! config conn-id {:conn-id conn-id})
     {:status 200
      :body   "connected"}))
 
