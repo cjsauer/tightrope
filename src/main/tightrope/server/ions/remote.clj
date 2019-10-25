@@ -102,12 +102,12 @@
 (defn- encode-data
   [data]
   ;; TODO encode this with something other than str
-  (-> data pr-str .getBytes SdkBytes/fromByteArray))
+  (-> data pr-str))
 
 (defn send-data!
   [{:keys [remote]} conn-id msg]
   (let [uri       (URI. (:ws-uri remote))
-        msg-bytes (encode-data msg)
+        msg-bytes (-> (encode-data msg) .getBytes SdkBytes/fromByteArray)
         client    (.. (ApiGatewayManagementApiClient/builder)
                       (endpointOverride uri)
                       (build))
