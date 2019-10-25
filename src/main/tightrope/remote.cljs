@@ -158,20 +158,22 @@
 (defn- ws-loop!
   [ctx server-chan]
   (reset! schan server-chan)
-  (go-loop []
+  (go-loop [is-first? true]
     (let [{:keys [message error]} (<! server-chan)]
       (when error
         (js/console.warn error))
       (when message
-        (prn message)
-        (recur)))))
+        (cond-> message
+          is-first? ((comp cljs.reader/read-string js/atob))
+          true      prn)
+        (recur false)))))
 
 (defn install-websockets!
   [{:keys [remote] :as ctx}]
   (set! (.-onload js/window)
         (fn []
           (go
-            (let [{:keys [ws-channel error]} (<! (chord/ws-ch (:ws-uri remote)))]
+            (let [{:keys [ws-channel error] :as ret} (<! (chord/ws-ch (:ws-uri remote)))]
               (if error
                 (js/console.error error)
                 (do
