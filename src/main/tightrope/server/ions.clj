@@ -1,23 +1,15 @@
 (ns tightrope.server.ions
-  (:require [com.wsscode.pathom.connect.datomic :as pcd]
+  (:require [com.wsscode.pathom.connect :as pc]
+            [com.wsscode.pathom.connect.datomic :as pcd]
             [com.wsscode.pathom.connect.datomic.client :refer [client-config]]
             [datomic.client.api :as d]
-            [tightrope.server.handler :as handler]
             [datomic.ion.cast :as icast]
-            [datomic.ion.lambda.api-gateway :as apigw]
             [datomic.ion.edn.api-gateway :as edngw]
-            )
-  (:import [java.net URI]
-           [software.amazon.awssdk.services.apigatewaymanagementapi
-            ApiGatewayManagementApiClient
-            ApiGatewayManagementApiAsyncClient
-            ApiGatewayManagementApiAsyncClientBuilder]
-           [software.amazon.awssdk.services.apigatewaymanagementapi.model
-            GetConnectionRequest
-            PostToConnectionRequest
-            PostToConnectionResponse]
-           [software.amazon.awssdk.core SdkBytes]
-           ))
+            [tightrope.server.handler :as handler])
+  (:import java.net.URI
+           software.amazon.awssdk.core.SdkBytes
+           software.amazon.awssdk.services.apigatewaymanagementapi.ApiGatewayManagementApiClient
+           software.amazon.awssdk.services.apigatewaymanagementapi.model.PostToConnectionRequest))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Built-in schema
@@ -38,6 +30,7 @@
 
 (def built-in-schemas
   [ws-connection-schema])
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Database helpers
@@ -79,6 +72,7 @@
   [config]
   (d/db (get-conn config)))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; API Gateway Handler
 
@@ -94,18 +88,16 @@
     (handler/http-handler merged-config)))
 
 
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Entity subscription
 
 (defn subscribe!
-  [conn connId lookups]
-  (d/transact conn {:tx-data [{:aws.apigw.ws.connection/id connId
+  [conn conn-id lookups]
+  (d/transact conn {:tx-data [{:aws.apigw.ws.connection/id conn-id
                                ::watch lookups}]}))
 
 (defn unsubscribe-tx
-  [db connId lookups]
+  [db conn-id lookups]
   (mapv #(vector :db/retract (first %) ::watch (second %))
         (d/q '[:find ?conn ?watched
                :in $ ?cid [[?ident-attr ?ident] ...]
@@ -113,12 +105,15 @@
                [?conn :aws.apigw.ws.connection/id ?cid]
                [?conn ::watch ?watched]
                [?watched ?ident-attr ?ident]]
-             db connId lookups)))
+             db conn-id lookups)))
 
 (defn unsubscribe!
-  [conn connId lookups]
-  (let [retractions (unsubscribe-tx (d/db conn) connId lookups)]
+  [conn conn-id lookups]
+  ;; FIXME: not inside transaction function
+  ;; would require tightrope user to add `unsubscribe-tx` to their ion-config...
+  (let [retractions (unsubscribe-tx (d/db conn) conn-id lookups)]
     (d/transact conn {:tx-data retractions})))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -160,6 +155,7 @@
             (assoc table e (eid->lookups db e)))
           {}
           (map :e datoms)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Broadcasting

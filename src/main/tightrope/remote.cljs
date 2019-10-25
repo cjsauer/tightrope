@@ -13,13 +13,22 @@
 
 (def ^:private scheduled-posts-chan (a/chan max-batch-size))
 
+(defn get-connection-id
+  [{:keys [conn] :as ctx}]
+  (ds/q '[:find ?conn-id .
+          :in $
+          :where [_ ::conn-id ?conn-id]]
+        (ds/db conn)))
+
 (defn- post!
   [{:keys [remote] :as ctx} req]
   (go
     (let [req-middleware-fn  (get remote :request-middleware (fn [_ r] r))
           resp-middleware-fn (get remote :response-middleware (fn [_ r] r))
           mw-req             (req-middleware-fn ctx req)
-          full-req           (update mw-req :headers merge {"Accept" http-accept-medium})
+          conn-id            (get-connection-id ctx)
+          full-req           (update mw-req :headers merge {"Accept" http-accept-medium
+                                                            "Tightrope-Connection-Id" conn-id})
           resp               (<! (http/post (:uri remote) full-req))]
       (resp-middleware-fn ctx resp))))
 
@@ -158,15 +167,33 @@
 (defn- ws-loop!
   [ctx server-chan]
   (reset! schan server-chan)
-  (go-loop [is-first? true]
+  (go-loop []
     (let [{:keys [message error]} (<! server-chan)]
       (when error
         (js/console.warn error))
       (when message
-        (cond-> message
-          is-first? ((comp cljs.reader/read-string js/atob))
-          true      prn)
-        (recur false)))))
+        ;; TODO: transact incoming payloads into db
+        (prn message)
+        (recur)))))
+
+(defn- handshake!
+  [ctx server-chan]
+  (println "tightrope: WebSocket connected!")
+  (println "tightrope: WebSocket handshaking...")
+  (go
+    (>! server-chan "hello")
+    (let [{:keys [message error]} (<! server-chan)]
+      (when error
+        (js/console.error "tightrope: WS handshake failed, not connected"))
+      (if-not message
+        (js/console.error "tightrope: WS handshake empty response")
+        (let [conn-id (-> message
+                          js/atob
+                          cljs.reader/read-string
+                          :conn-id)]
+          (println "tightrope: WebSocket connection ID received" conn-id)
+          (ds/transact! (:conn ctx) [{::conn-id conn-id}])
+          (ws-loop! ctx server-chan))))))
 
 (defn install-websockets!
   [{:keys [remote] :as ctx}]
@@ -176,7 +203,5 @@
             (let [{:keys [ws-channel error] :as ret} (<! (chord/ws-ch (:ws-uri remote)))]
               (if error
                 (js/console.error error)
-                (do
-                  (println "tightrope: WebSocket connected!")
-                  (>! ws-channel "hello")
-                  (ws-loop! ctx ws-channel))))))))
+                (handshake! ctx ws-channel)
+                ))))))
