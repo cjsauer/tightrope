@@ -54,4 +54,4 @@
         merged-config  (-> handler-config
                            (update-in [:parser-opts :env] merge env)
                            (update-in [:parser-opts :plugins] (fnil concat []) plugins))]
-    (handler/tightrope-handler merged-config)))
+    (handler/http-handler merged-config)))

@@ -14,7 +14,7 @@
     {:status  200
      :body    parse-result}))
 
-(defn- default-parser
+(defn- make-parser
   [{:keys [env resolvers plugins]}]
   (p/parallel-parser
    {::p/env     (merge
@@ -31,10 +31,10 @@
                          p/error-handler-plugin
                          p/trace-plugin])}))
 
-(defn tightrope-handler
-  [{:keys [path parser-opts] :as handler-opts}]
-  (let [parser (or (:parser handler-opts)
-                   (default-parser parser-opts))
+(defn http-handler
+  [{:keys [path parser-opts] :as config}]
+  (let [parser (or (:parser config)
+                   (make-parser parser-opts))
         ctx    {:parser parser}
         routes (compj/routes
                 (POST path [] (partial handler ctx)))]

@@ -11,17 +11,19 @@
             ApiGatewayManagementApiAsyncClientBuilder]
            [software.amazon.awssdk.services.apigatewaymanagementapi.model
             GetConnectionRequest
-            PostToConnectionRequest]
+            PostToConnectionRequest
+            PostToConnectionResponse]
            [software.amazon.awssdk.core SdkBytes]
            ))
 
+
 (def connection-schema
-  [{:db/ident       ::connection-id
+  [{:db/ident       :aws.apigw.ws.connection/id
     :db/unique      :db.unique/identity
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/noHistory   true
-    :db/doc         "API Gateway WS connection ID"}
+    :db/doc         "API Gateway websocket connection ID"}
 
    {:db/ident       ::watch
     :db/valueType   :db.type/ref
@@ -30,41 +32,12 @@
     :db/doc         "Signals an API Gateway WS connection's intent to watch this entity"}])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; WebSocket handling
-
-;; TODO: wrap this in mutations/resolvers so it can be easily plugged in to the rest of TR
-
-;; subscribe!
-;; - given a lookup only (no query)
-;; - backend stores [lookup conn]
-;;   - `::connections` attribute
-;;     - :db/noHistory and :db/index (to take advantage of AVET index)
-;;     - card-many str-type attribute
-;;     - transacted onto entities to signify a connection's listening intent
-;;     - use the ::_connections attribute in order to build conn->eids map
-;; - backend sends all datoms matching lookup to subscribed connections
-;; - takes optional datoms to be transacted onto the connection entity (reified subscribtions)
-;;   - e.g. user ID
-;;   - allows you to do things like track who has watched (seen) entities and when
-;;   - the connection attributes are noHistory by default
-
-;; can we assume ::connections changes will never exist in the same tx as "data changes"?
-;;   - probably a safe assumption. controlled by apigw connect/disconnect events (and send exceptions)
+;; Entity subscriptions
 
 (defn subscribe!
   [conn connId lookups]
-  (d/transact conn {:tx-data [{::connection-id connId
-                               ::watch         lookups}]}))
-
-;;
-;; unsubscribe!
-;; - dissoc [conn lookup] from backend store
-
-;; "transact" is an important (built-in) mutation
-;; - if the problem of trust can be solved, then the wire disappears
-;;   - ::authz/symbol is a card-one symbol attribute
-;;     - predicate (fn [db conn-id datom])
-;;     - resolved at broadcast time per datom (from tx-data)
+  (d/transact conn {:tx-data [{:aws.apigw.ws.connection/id connId
+                               ::watch lookups}]}))
 
 (defn unsubscribe-tx
   [db connId lookups]
@@ -72,7 +45,7 @@
         (d/q '[:find ?conn ?watched
                :in $ ?cid [[?ident-attr ?ident] ...]
                :where
-               [?conn ::connection-id ?cid]
+               [?conn :aws.apigw.ws.connection/id ?cid]
                [?conn ::watch ?watched]
                [?watched ?ident-attr ?ident]]
              db connId lookups)))
@@ -83,7 +56,8 @@
     (d/transact conn {:tx-data retractions})))
 
 
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Multiplexing
 
 (defn multiplex-datoms
   [db tx-data]
@@ -91,13 +65,19 @@
               :in $ [[?e ?a ?v ?tx ?op] ...]
               :where
               [?conn ::watch ?e]
-              [?conn ::connection-id ?cid]
+              [?conn :aws.apigw.ws.connection/id ?cid]
               [?a :db/ident ?attr]]
             db
             tx-data)
        (reduce (fn [plan cid-datom]
                  (update plan (first cid-datom) (fnil conj #{}) (subvec cid-datom 1)))
                {})))
+
+;; plan looks like:
+;;
+;; {"c1" [[15256823347019860 :user/age 28 13194139533332 true]
+;;        [39424088925536341 :user/age 26 13194139533332 true]]
+;;  "c2" [...]}
 
 (defn eid->lookups
   [db eid]
@@ -116,14 +96,17 @@
           {}
           datoms))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Broadcasting
+
 (defn- encode-data
   [data]
   ;; TODO encode this with something other than str
   (-> data pr-str .getBytes SdkBytes/fromByteArray))
 
 (defn send-data!
-  [conn-id msg]
-  (let [uri       (URI. (str "https://7ps9rxk22d.execute-api.us-east-1.amazonaws.com" "/" "dev"))
+  [{:keys [remote]} conn-id msg]
+  (let [uri       (URI. (:ws-uri remote))
         msg-bytes (encode-data msg)
         client    (.. (ApiGatewayManagementApiClient/builder)
                       (endpointOverride uri)
@@ -134,68 +117,57 @@
                       (build))]
     (.postToConnection client request)))
 
-;; plan looks like:
-;;
-;; {"c1" [["c1" 15256823347019860 :user/age 28 13194139533332 true]
-;;        ["c1" 39424088925536341 :user/age 26 13194139533332 true]]
-;;  "c2" [...]}
-
 (defn broadcast-datoms!
-  [db datoms]
+  [config db datoms]
   (let [plan  (multiplex-datoms db datoms)
         table (make-lookup-table db datoms)]
     (doseq [[cid datoms] plan]
-      (send-data! cid {:datoms       datoms
-                       :eid->lookups table}))))
+      (send-data! config cid {:datoms       datoms
+                              :eid->lookups table}))))
 
-(comment
+(defn broadcast-tx-result!
+  [config tx-data]
+  (broadcast-datoms! config (:db-after tx-data) (:tx-data tx-data)))
 
-  (subscribe-tx nil "c1" [:ident 1] [:ident 2])
+(defn xact!
+  [conn tx-data]
+  (-> (d/transact conn {:tx-data tx-data})
+      broadcast-tx-result!))
 
-  (encode-data {:test "hello"})
 
-  (send-data! "CFuMWelHIAMCEpw=" {:test "hello"})
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Connection management
 
-  (let [;; simulate the ::connections avet index
-        connections {"c1" #{1 2}
-                     "c2" #{2}
-                     "c3" #{1 3}}
-        datoms      [[1 :x "x" 111 true]
-                     [2 :y "y" 111 true]
-                     [3 :z "z" 111 false]]]
-    ;; goal: send 1 payload to each connection
-    (reduce (fn multiplex-datoms [conn->payload [c eids]]
-              (assoc conn->payload c
-                     (filter #(-> % first eids) datoms)))
-            {}
-            connections))
+(defn make-on-connect
+  [config]
+  (apigw/ionize
+   (fn on-connect
+     [{::edngw/keys [data]}]
+     (let [{:keys [connectionId]} (:requestContext data)]
+       (icast/event {:msg "TightropeWebSocketConnectEvent" ::data data})
+       ;; inform client of its unique connectionId
+       (send-data! config connectionId {:connId connectionId})
+       {:status 200
+        :body   "connected"}))))
 
-  )
+(defn make-on-disconnect
+  [config]
+  (apigw/ionize
+   (fn on-disconnect
+     [{::edngw/keys [data]}]
+     (let [{:keys [connectionId]} (:requestContext data)]
+       (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::data data})
+       {:status 200
+        :body   "disconnected"}))))
 
-(defn on-connect*
-  [{::edngw/keys [data]}]
-  (let [{:keys [connectionId]} (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketConnectEvent" ::data data})
-    {:status 200
-     :body   "connected"}))
-
-(def on-connect (apigw/ionize on-connect*))
-
-(defn on-disconnect*
-  [{::edngw/keys [data]}]
-  (let [{:keys [connectionId]} (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::data data})
-    {:status 200
-     :body   "disconnected"}))
-(def on-disconnect (apigw/ionize on-disconnect*))
-
-(defn on-message*
-  [input]
-  (let [{:keys [body] :as data} (::edngw/data input)
-        {:keys [connectionId]}  (:requestContext data)]
-    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data
-                  ::body body ::conn-id connectionId})
-    (send-data! connectionId body )
-    {:status 200
-     :body   "message receieved"}))
-(def on-message (apigw/ionize on-message*))
+(defn make-on-message
+  [config]
+  (apigw/ionize
+   (fn on-message
+     [input]
+     (let [{:keys [body] :as data} (::edngw/data input)
+           {:keys [connectionId]}  (:requestContext data)]
+       (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data
+                     ::body body ::conn-id connectionId})
+       {:status 200
+        :body   "message receieved"}))))
