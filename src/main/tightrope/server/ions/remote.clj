@@ -138,36 +138,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Connection management
 
-(defn make-on-connect
-  [config]
-  (apigw/ionize
-   (fn on-connect
-     [{::edngw/keys [data]}]
-     (let [{:keys [connectionId]} (:requestContext data)]
-       (icast/event {:msg "TightropeWebSocketConnectEvent" ::data data})
-       ;; inform client of its unique connectionId
-       (send-data! config connectionId {:connId connectionId})
-       {:status 200
-        :body   "connected"}))))
+(defn on-connect
+  [config input]
+  (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
+    (icast/event {:msg "TightropeWebSocketConnectEvent" ::input input})
+    ;; inform client of its unique connectionId
+    (send-data! config conn-id {:conn-id conn-id})
+    {:status 200
+     :body   "connected"}))
 
-(defn make-on-disconnect
-  [config]
-  (apigw/ionize
-   (fn on-disconnect
-     [{::edngw/keys [data]}]
-     (let [{:keys [connectionId]} (:requestContext data)]
-       (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::data data})
-       {:status 200
-        :body   "disconnected"}))))
+(defn on-disconnect
+  [config input]
+  (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
+    (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input input})
+    {:status 200
+     :body   "disconnected"}))
 
-(defn make-on-message
-  [config]
-  (apigw/ionize
-   (fn on-message
-     [input]
-     (let [{:keys [body] :as data} (::edngw/data input)
-           {:keys [connectionId]}  (:requestContext data)]
-       (icast/event {:msg "TightropeWebSocketMessageEvent" ::input (str input) ::data data
-                     ::body body ::conn-id connectionId})
-       {:status 200
-        :body   "message receieved"}))))
+(defn on-message
+  [config input]
+  (let [body    (-> input ::edngw/data :body)
+        conn-id (-> input ::edngw/data :requestContext :connectionI)]
+    (icast/event {:msg "TightropeWebSocketMessageEvent" ::input input})
+    {:status 200
+     :body   "message receieved"}))
