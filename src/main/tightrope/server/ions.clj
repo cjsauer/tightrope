@@ -8,29 +8,24 @@
             [tightrope.server.handler :as handler])
   (:import java.net.URI
            software.amazon.awssdk.core.SdkBytes
-           software.amazon.awssdk.services.apigatewaymanagementapi.ApiGatewayManagementApiClient
+           software.amazon.awssdk.services.apigatewaymanagementapi.ApiGatewayManagementApiAsyncClient
            software.amazon.awssdk.services.apigatewaymanagementapi.model.PostToConnectionRequest))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Built-in schema
 
 (def ws-connection-schema
-  [{:db/ident       :aws.apigw.ws.connection/id
+  [{:db/ident       :aws.apigw.ws.conn/id
     :db/unique      :db.unique/identity
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/noHistory   true
     :db/doc         "API Gateway websocket connection ID"}
-
-   {:db/ident       ::watch
-    :db/valueType   :db.type/ref
-    :db/cardinality :db.cardinality/many
-    :db/noHistory   true
-    :db/doc         "Signals an API Gateway WS connection's intent to watch this entity"}])
+   ])
 
 (def built-in-schemas
   [ws-connection-schema])
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Database helpers
@@ -72,6 +67,23 @@
   [config]
   (d/db (get-conn config)))
 
+(defn all-conn-ids
+  [db]
+  (->>
+   (d/q '[:find ?cid
+          :in $
+          :where [?c :aws.apigw.ws.conn/id ?cid]]
+        db)
+   (mapv peek)))
+
+(defn save-conn-id!
+  [conn conn-id]
+  (d/transact conn {:tx-data [{:aws.apigw.ws.conn/id conn-id}]}))
+
+(defn retract-conn-id!
+  [conn conn-id]
+  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.conn/id conn-id]]]}))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; API Gateway Handler
@@ -88,56 +100,58 @@
     (handler/http-handler merged-config)))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Entity subscription
-
-(defn subscribe!
-  [conn conn-id lookups]
-  (d/transact conn {:tx-data [{:aws.apigw.ws.connection/id conn-id
-                               ::watch lookups}]}))
-
-(defn unsubscribe-tx
-  [db conn-id lookups]
-  (mapv #(vector :db/retract (first %) ::watch (second %))
-        (d/q '[:find ?conn ?watched
-               :in $ ?cid [[?ident-attr ?ident] ...]
-               :where
-               [?conn :aws.apigw.ws.connection/id ?cid]
-               [?conn ::watch ?watched]
-               [?watched ?ident-attr ?ident]]
-             db conn-id lookups)))
-
-(defn unsubscribe!
-  [conn conn-id lookups]
-  ;; FIXME: not inside transaction function
-  ;; would require tightrope user to add `unsubscribe-tx` to their ion-config...
-  (let [retractions (unsubscribe-tx (d/db conn) conn-id lookups)]
-    (d/transact conn {:tx-data retractions})))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Datom multiplexing
+;; WebSocket sending
 
-(defn multiplex-datoms
-  [db tx-data]
-  (->> (d/q '[:find ?cid ?e ?attr ?v ?tx ?op
-              :in $ [[?e ?a ?v ?tx ?op] ...]
-              :where
-              [?conn ::watch ?e]
-              [?conn :aws.apigw.ws.connection/id ?cid]
-              [?a :db/ident ?attr]]
-            db
-            (map (juxt :e :a :v :tx :added) tx-data))
-       (reduce (fn [plan cid-datom]
-                 (update plan (first cid-datom) (fnil conj #{}) (subvec cid-datom 1)))
-               {})))
+(defn- encode-data
+  [data]
+  ;; TODO encode this with something other than str
+  (-> data pr-str))
 
-;; plan looks like:
+(defn- retract-connection!
+  [conn conn-id]
+  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.connection/id conn-id]]]}))
+
+(defn- make-client
+  [config]
+  (.. (ApiGatewayManagementApiAsyncClient/builder)
+      (endpointOverride (-> config :remote :ws-uri URI.))
+      (build)))
+
+(defn- make-request
+  [conn-id data]
+  (let [data-bytes (-> data encode-data .getBytes SdkBytes/fromByteArray)]
+    (.. (PostToConnectionRequest/builder)
+        (connectionId conn-id)
+        (data data-bytes)
+        (build))))
+
+(defn send-data!
+  [config data & conn-ids]
+  (let [client (make-client config)]
+    (doseq [cid conn-ids]
+      (let [request (make-request cid data)]
+        (try
+          (.postToConnection client request)
+          (catch Exception e nil))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Broadcasting
+
+;; Instead of multiplexing based on connections, broadcast _all_ datoms
+;; to _all_ connections, subject to an authorization (authz) function.
+;; This function is user-provided.
 ;;
-;; {"c1" [[15256823347019860 :user/age 28 13194139533332 true]
-;;        [39424088925536341 :user/age 26 13194139533332 true]]
-;;  "c2" [...]}
+;; Signature of authz:
+
+(defn authorize
+  [config datom]
+  ((:authz config) config datom))
+
+(defn- authorization-plan
+  [])
+
 
 (defn eid->lookups
   [db eid]
@@ -156,46 +170,22 @@
           {}
           (map :e datoms)))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Broadcasting
-
-(defn- encode-data
-  [data]
-  ;; TODO encode this with something other than str
-  (-> data pr-str))
-
-(defn- retract-connection!
-  [conn conn-id]
-  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.connection/id conn-id]]]}))
-
-(defn send-data!
-  [{:keys [remote] :as config} conn-id msg]
-  (let [uri       (URI. (:ws-uri remote))
-        msg-bytes (-> (encode-data msg) .getBytes SdkBytes/fromByteArray)
-        client    (.. (ApiGatewayManagementApiClient/builder)
-                      (endpointOverride uri)
-                      (build))
-        request   (.. (PostToConnectionRequest/builder)
-                      (connectionId conn-id)
-                      (data msg-bytes)
-                      (build))]
-    (try
-      (.postToConnection client request)
-      (catch Exception e
-        (retract-connection! (get-conn config) conn-id)))))
-
 (defn broadcast-datoms!
   [config db datoms]
-  (let [plan  (multiplex-datoms db datoms)
-        table (make-lookup-table db datoms)]
-    (doseq [[cid datoms] plan]
-      (send-data! config cid {:datoms       datoms
-                              :eid->lookups table}))))
+  (let [conn-ids (all-conn-ids db)
+        table    (make-lookup-table db datoms)
+        data     {:datoms       datoms
+                  :eid->lookups table}]
+    (apply send-data! config data conn-ids)))
 
 (defn broadcast-tx-result!
   [config tx-data]
   (broadcast-datoms! config (:db-after tx-data) (:tx-data tx-data)))
+
+(defn xact!
+  [config tx-data]
+  (->> (d/transact (get-conn config) {:tx-data tx-data})
+       (broadcast-tx-result! config)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -205,6 +195,7 @@
   [config input]
   (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
     (icast/event {:msg "TightropeWebSocketConnectEvent" ::input input})
+    (save-conn-id! (get-conn config) conn-id)
     {:status 200
      :body   "connected"}))
 
@@ -212,6 +203,7 @@
   [config input]
   (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
     (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input input})
+    (retract-conn-id! (get-conn config) conn-id)
     {:status 200
      :body   "disconnected"}))
 
