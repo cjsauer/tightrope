@@ -111,7 +111,7 @@
 
 (defn- retract-connection!
   [conn conn-id]
-  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.connection/id conn-id]]]}))
+  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.conn/id conn-id]]]}))
 
 (defn- make-client
   [config]
@@ -163,29 +163,59 @@
          [?e ?attr ?val]]
        db eid))
 
-(defn make-lookup-table
+(defn- ref?
+  [db a]
+  (-> (d/pull db [:db/valueType] a)
+      :db/valueType
+      (= :db.type/ref)))
+
+(defn- lookup-table-entry
+  [db [e a v]]
+  (let [ents (if (ref? db a)
+               [e v]
+               [e])]
+    (into #{}
+          (mapcat (partial eid->lookups db))
+          ents)))
+
+(defn- make-lookup-table
   [db datoms]
-  (reduce (fn [table e]
-            (assoc table e (eid->lookups db e)))
+  (reduce (fn [table [e a v :as datom]]
+            (let [lkups (lookup-table-entry db datom)]
+              (cond-> table
+                (not-empty lkups)
+                (assoc e lkups))))
           {}
-          (map :e datoms)))
+          (map (juxt :e :a :v) datoms)))
 
-(defn broadcast-datoms!
+(defn- normalize-datom
+  [db datom]
+  (let [attr (d/pull db [:db/ident] (:a datom))]
+    [(:e datom)
+     (:db/ident attr)
+     (:v datom)
+     (:tx datom)
+     (:added datom)]))
+
+(defn- broadcast-datoms!
   [config db datoms]
-  (let [conn-ids (all-conn-ids db)
-        table    (make-lookup-table db datoms)
-        data     {:datoms       datoms
-                  :eid->lookups table}]
-    (apply send-data! config data conn-ids)))
+  (let [conn-ids    (all-conn-ids db)
+        table       (make-lookup-table db datoms)
+        norm-datoms (mapv (partial normalize-datom db) datoms)
+        data        {:datoms       norm-datoms
+                     :eid->lookups table}]
+    (when-not (empty? table)
+      (apply send-data! config data conn-ids))))
 
-(defn broadcast-tx-result!
+(defn- broadcast-tx-result!
   [config tx-data]
   (broadcast-datoms! config (:db-after tx-data) (:tx-data tx-data)))
 
 (defn xact!
   [config tx-data]
-  (->> (d/transact (get-conn config) {:tx-data tx-data})
-       (broadcast-tx-result! config)))
+  (let [txd (d/transact (get-conn config) {:tx-data tx-data})]
+    (broadcast-tx-result! config txd)
+    txd))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
