@@ -67,7 +67,7 @@
   [config]
   (d/db (get-conn config)))
 
-(defn- all-conn-ids
+(defn all-conn-ids
   [db]
   (->>
    (d/q '[:find ?cid
@@ -106,8 +106,8 @@
       (build)))
 
 (defn- make-request
-  [conn-id data]
-  (let [data-bytes (-> data encode-data .getBytes SdkBytes/fromByteArray)]
+  [conn-id encoded-data]
+  (let [data-bytes (-> encoded-data .getBytes SdkBytes/fromByteArray)]
     (.. (PostToConnectionRequest/builder)
         (connectionId conn-id)
         (data data-bytes)
@@ -115,14 +115,15 @@
 
 (defn send-data!
   [config data & conn-ids]
-  (let [client (make-client config)]
+  (let [client       (make-client config)
+        encoded-data (encode-data data)
+        conn         (get-conn config)]
     (doseq [cid conn-ids]
-      (let [request (make-request cid data)]
-        (try
-          (.postToConnection client request)
-          (catch Exception e
-            (retract-user-conn-id! (get-conn config) cid)))))))
-
+      (let [request (make-request cid encoded-data)]
+        (-> (.postToConnection client request)
+            (.exceptionally (reify java.util.function.Function
+                              (apply [this _]
+                                (retract-user-conn-id! conn cid)))))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -219,7 +220,7 @@
 (pc/defmutation complete-handshake!
   [{:keys [request conn config]} {:aws.apigw.ws.conn/keys [id]}]
   {::pc/input #{:aws.apigw.ws.conn/id}}
-  (when-let [user-lookup ((:request->lookup config) request)]
+  (when-let [user-lookup ((-> config :remote :request->lookup) request)]
     (save-user-conn-id! conn user-lookup id)
     nil))
 
@@ -258,8 +259,7 @@
         env            {:conn   conn
                         :config config}
         plugins        [(pcd/datomic-connect-plugin (assoc client-config ::pcd/conn conn))]
-        handler-config (select-keys config [:path :parser :parser-opts])
-        merged-config  (-> handler-config
+        merged-config  (-> config
                            (update-in [:parser-opts :env] merge env)
                            (update-in [:parser-opts :plugins] (fnil concat []) plugins)
                            (update-in [:parser-opts :resolvers] (fnil concat []) built-in-resolvers))]
