@@ -262,5 +262,5 @@
         merged-config  (-> handler-config
                            (update-in [:parser-opts :env] merge env)
                            (update-in [:parser-opts :plugins] (fnil concat []) plugins)
-                           (update-in [:parser-opts :resolvers (fnil concat []) built-in-resolvers]))]
+                           (update-in [:parser-opts :resolvers] (fnil concat []) built-in-resolvers))]
     (handler/http-handler merged-config)))
