@@ -27,11 +27,6 @@
 (def built-in-schemas
   [ws-connection-schema])
 
-(declare complete-handshake!)
-
-(def built-in-resolvers
-  [complete-handshake!])
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Database helpers
 
@@ -54,7 +49,7 @@
       (when-not (schema-loaded? db sch)
         (d/transact conn {:tx-data sch})))))
 
-(defn ensure-schemas
+(defn- ensure-schemas
   [{:keys [db-name schemas] :as config}]
   (let [client (get-client (:datomic-config config))]
     (d/create-database client {:db-name db-name})
@@ -72,7 +67,7 @@
   [config]
   (d/db (get-conn config)))
 
-(defn all-conn-ids
+(defn- all-conn-ids
   [db]
   (->>
    (d/q '[:find ?cid
@@ -81,35 +76,18 @@
         db)
    (mapv peek)))
 
-(defn save-user-conn-id!
+(defn- save-user-conn-id!
   [conn user-lookup conn-id]
   (d/transact conn {:tx-data [(conj {:aws.apigw.ws.conn/id conn-id}
                                     user-lookup)]}))
 
-(defn retract-user-conn-id!
+(defn- retract-user-conn-id!
   [conn conn-id]
-  (let [eid (-> conn
-                d/db
-                (d/pull [:db/id] [:aws.apigw.ws.conn/id conn-id])
-                :db/id)]
+  (when-let [eid (-> conn
+                     d/db
+                     (d/pull [:db/id] [:aws.apigw.ws.conn/id conn-id])
+                     :db/id)]
     (d/transact conn {:tx-data [[:db/retract eid :aws.apigw.ws.conn/id conn-id]]})))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; API Gateway Handler
-
-(defn ion-handler
-  [config]
-  (let [conn           (get-conn config)
-        env            {:conn   conn
-                        :config config}
-        plugins        [(pcd/datomic-connect-plugin (assoc client-config ::pcd/conn conn))]
-        handler-config (select-keys config [:path :parser :parser-opts])
-        merged-config  (-> handler-config
-                           (update-in [:parser-opts :env] merge env)
-                           (update-in [:parser-opts :plugins] (fnil concat []) plugins)
-                           (update-in [:parser-opts :resolvers (fnil concat []) built-in-resolvers]))]
-    (handler/http-handler merged-config)))
 
 
 
@@ -234,8 +212,9 @@
     tx-res))
 
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Connection management
+;; WebSocket connection management
 
 (pc/defmutation complete-handshake!
   [{:keys [request conn config]} {:aws.apigw.ws.conn/keys [id]}]
@@ -265,3 +244,23 @@
     (icast/event {:msg "TightropeWebSocketMessageEvent" ::input input})
     {:status 200
      :body   (encode-data {:conn-id conn-id})}))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Primary API handler
+
+(def built-in-resolvers
+  [complete-handshake!])
+
+(defn ion-handler
+  [config]
+  (let [conn           (get-conn config)
+        env            {:conn   conn
+                        :config config}
+        plugins        [(pcd/datomic-connect-plugin (assoc client-config ::pcd/conn conn))]
+        handler-config (select-keys config [:path :parser :parser-opts])
+        merged-config  (-> handler-config
+                           (update-in [:parser-opts :env] merge env)
+                           (update-in [:parser-opts :plugins] (fnil concat []) plugins)
+                           (update-in [:parser-opts :resolvers (fnil concat []) built-in-resolvers]))]
+    (handler/http-handler merged-config)))

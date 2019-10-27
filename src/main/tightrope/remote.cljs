@@ -13,22 +13,13 @@
 
 (def ^:private scheduled-posts-chan (a/chan max-batch-size))
 
-(defn get-connection-id
-  [{:keys [conn] :as ctx}]
-  (ds/q '[:find ?conn-id .
-          :in $
-          :where [_ ::conn-id ?conn-id]]
-        (ds/db conn)))
-
 (defn- post!
   [{:keys [remote] :as ctx} req]
   (go
     (let [req-middleware-fn  (get remote :request-middleware (fn [_ r] r))
           resp-middleware-fn (get remote :response-middleware (fn [_ r] r))
           mw-req             (req-middleware-fn ctx req)
-          conn-id            (get-connection-id ctx)
-          full-req           (update mw-req :headers merge {"Accept" http-accept-medium
-                                                            "Tightrope-Connection-Id" conn-id})
+          full-req           (update mw-req :headers merge {"Accept" http-accept-medium})
           resp               (<! (http/post (:uri remote) full-req))]
       (resp-middleware-fn ctx resp))))
 
@@ -135,8 +126,9 @@
         entity              (get body m)
         entity-with-lookup  (conj entity lookup)
         mutating-retraction [:db.fn/retractAttribute lookup :ui/mutating?]]
-    (ds/transact! conn [entity-with-lookup
-                        mutating-retraction])
+    (when lookup
+      (ds/transact! conn [entity-with-lookup
+                          mutating-retraction]))
     entity-with-lookup))
 
 (defn mutate!
@@ -149,7 +141,7 @@
   ([{:keys [conn] :as ctx} lookup query mut args]
    (ds/transact! conn [(conj {:ui/mutating? true} lookup)])
    (go
-     (let [full-mutation    [{`(~mut ~args) query}]
+     (let [full-mutation    [{`(~mut ~args) (or query [])}]
            req              {http-params-key full-mutation}
            {:keys [status]
             :as   response} (<! (schedule-post! ctx req))]
@@ -197,7 +189,8 @@
                           cljs.reader/read-string
                           :conn-id)]
           (println "tightrope: WebSocket connection ID received" conn-id)
-          (ds/transact! (:conn ctx) [{::conn-id conn-id}])
+          (<! (mutate! ctx 'tightrope.server.ions/complete-handshake! {:aws.apigw.ws.conn/id conn-id}))
+          (println "tightrope: handshake complete, starting WS loop")
           (ws-loop! ctx server-chan))))))
 
 (defn install-websockets!
