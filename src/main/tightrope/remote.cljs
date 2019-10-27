@@ -160,26 +160,6 @@
                                          :response response})))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; subscribe / unsubscribe
-
-;; 1. wait for ::conn-id to exist in database
-;;    - max retries and then error
-;; 2. run server subscribe mutation via `mutate!`
-;; 3. store eid -> sub-count in a registry
-;; 4. store lookup -> eid in a registry
-;;    - eid is in mutation response
-
-(defn subscribe!
-  [])
-
-;; 1. decrement eid -> sub-count
-;;    - find eid with lookup->eid table
-;; 2. if zero, run server unsubscribe mutation via `mutate!`
-
-(defn unsubscribe!
-  [])
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; WebSockets
 ;;
 ;; TODO: auto-reconnect attempts
@@ -197,6 +177,9 @@
         ;; TODO: transact incoming payloads into db
         (prn message)
         (recur)))))
+
+;; TODO: handshake needs one more step: calling the `complete-handshake` mutation
+;; on the server in order to link the connection ID with a user-entity
 
 (defn- handshake!
   [ctx server-chan]

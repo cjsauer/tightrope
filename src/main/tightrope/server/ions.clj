@@ -13,7 +13,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Built-in schema
+;; Built-ins
 
 (def ws-connection-schema
   [{:db/ident       :aws.apigw.ws.conn/id
@@ -26,6 +26,11 @@
 
 (def built-in-schemas
   [ws-connection-schema])
+
+(declare complete-handshake!)
+
+(def built-in-resolvers
+  [complete-handshake!])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Database helpers
@@ -72,17 +77,22 @@
   (->>
    (d/q '[:find ?cid
           :in $
-          :where [?c :aws.apigw.ws.conn/id ?cid]]
+          :where [_ :aws.apigw.ws.conn/id ?cid]]
         db)
    (mapv peek)))
 
-(defn save-conn-id!
-  [conn conn-id]
-  (d/transact conn {:tx-data [{:aws.apigw.ws.conn/id conn-id}]}))
+(defn save-user-conn-id!
+  [conn user-lookup conn-id]
+  (d/transact conn {:tx-data [(conj {:aws.apigw.ws.conn/id conn-id}
+                                    user-lookup)]}))
 
-(defn retract-conn-id!
+(defn retract-user-conn-id!
   [conn conn-id]
-  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.conn/id conn-id]]]}))
+  (let [eid (-> conn
+                d/db
+                (d/pull [:db/id] [:aws.apigw.ws.conn/id conn-id])
+                :db/id)]
+    (d/transact conn {:tx-data [[:db/retract eid :aws.apigw.ws.conn/id conn-id]]})))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -91,12 +101,14 @@
 (defn ion-handler
   [config]
   (let [conn           (get-conn config)
-        env            {:conn conn}
+        env            {:conn   conn
+                        :config config}
         plugins        [(pcd/datomic-connect-plugin (assoc client-config ::pcd/conn conn))]
         handler-config (select-keys config [:path :parser :parser-opts])
         merged-config  (-> handler-config
                            (update-in [:parser-opts :env] merge env)
-                           (update-in [:parser-opts :plugins] (fnil concat []) plugins))]
+                           (update-in [:parser-opts :plugins] (fnil concat []) plugins)
+                           (update-in [:parser-opts :resolvers (fnil concat []) built-in-resolvers]))]
     (handler/http-handler merged-config)))
 
 
@@ -108,10 +120,6 @@
   [data]
   ;; TODO encode this with something other than str
   (-> data pr-str))
-
-(defn- retract-connection!
-  [conn conn-id]
-  (d/transact conn {:tx-data [[:db/retractEntity [:aws.apigw.ws.conn/id conn-id]]]}))
 
 (defn- make-client
   [config]
@@ -134,57 +142,60 @@
       (let [request (make-request cid data)]
         (try
           (.postToConnection client request)
-          (catch Exception e nil))))))
+          (catch Exception e
+            (retract-user-conn-id! (get-conn config) cid)))))))
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Broadcasting
+;; Datom authorization
 
-;; Instead of multiplexing based on connections, broadcast _all_ datoms
-;; to _all_ connections, subject to an authorization (authz) function.
-;; This function is user-provided.
-;;
-;; Signature of authz:
+;; (defn authorize
+;;   [config datom]
+;;   ((:authz config) config datom))
 
-(defn authorize
-  [config datom]
-  ((:authz config) config datom))
+;; (defn- authorization-plan
+;;   [])
 
-(defn- authorization-plan
-  [])
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Datom normalization
 
 (defn eid->lookups
   [db eid]
-  (d/q '[:find ?ident ?val
-         :in $ ?e
-         :where
-         [?attr :db/unique :db.unique/identity]
-         [?attr :db/ident ?ident]
-         [?e ?attr ?val]]
-       db eid))
+  (->> (d/q '[:find ?ident ?val
+              :in $ ?e
+              :where
+              [?attr :db/unique :db.unique/identity]
+              [?attr :db/ident ?ident]
+              [?e ?attr ?val]]
+            db eid)
+       (into #{})))
 
 (defn- ref?
   [db a]
-  (-> (d/pull db [:db/valueType] a)
+  (-> (d/pull db [{:db/valueType [:db/ident]}] a)
       :db/valueType
+      :db/ident
       (= :db.type/ref)))
 
 (defn- lookup-table-entry
   [db [e a v]]
-  (let [ents (if (ref? db a)
-               [e v]
-               [e])]
-    (into #{}
-          (mapcat (partial eid->lookups db))
-          ents)))
+  (let [e-lkups (eid->lookups db e)]
+   (cond-> {}
+     (not-empty e-lkups)
+     (assoc e e-lkups)
+     (ref? db a)
+     (assoc v (eid->lookups db v)))))
 
 (defn- make-lookup-table
   [db datoms]
   (reduce (fn [table [e a v :as datom]]
-            (let [lkups (lookup-table-entry db datom)]
-              (cond-> table
-                (not-empty lkups)
-                (assoc e lkups))))
+            (let [entry (lookup-table-entry db datom)]
+              (cond->> table
+                (not-empty entry)
+                (merge-with conj entry))))
           {}
           (map (juxt :e :a :v) datoms)))
 
@@ -196,6 +207,11 @@
      (:v datom)
      (:tx datom)
      (:added datom)]))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Datom broadcasting
 
 (defn- broadcast-datoms!
   [config db datoms]
@@ -213,19 +229,25 @@
 
 (defn xact!
   [config tx-data]
-  (let [txd (d/transact (get-conn config) {:tx-data tx-data})]
-    (broadcast-tx-result! config txd)
-    txd))
+  (let [tx-res (d/transact (get-conn config) {:tx-data tx-data})]
+    (broadcast-tx-result! config tx-res)
+    tx-res))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Connection management
 
+(pc/defmutation complete-handshake!
+  [{:keys [request conn config]} {:aws.apigw.ws.conn/keys [id]}]
+  {::pc/input #{:aws.apigw.ws.conn/id}}
+  (when-let [user-lookup ((:request->lookup config) request)]
+    (save-user-conn-id! conn user-lookup id)
+    nil))
+
 (defn on-connect
   [config input]
   (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
     (icast/event {:msg "TightropeWebSocketConnectEvent" ::input input})
-    (save-conn-id! (get-conn config) conn-id)
     {:status 200
      :body   "connected"}))
 
@@ -233,7 +255,7 @@
   [config input]
   (let [conn-id (-> input ::edngw/data :requestContext :connectionId)]
     (icast/event {:msg "TightropeWebSocketDisconnectEvent" ::input input})
-    (retract-conn-id! (get-conn config) conn-id)
+    (retract-user-conn-id! (get-conn config) conn-id)
     {:status 200
      :body   "disconnected"}))
 
