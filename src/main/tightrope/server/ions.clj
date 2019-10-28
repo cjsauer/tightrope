@@ -126,17 +126,6 @@
                                 (retract-user-conn-id! conn cid)))))))))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Datom authorization
-
-;; (defn authorize
-;;   [config datom]
-;;   ((:authz config) config datom))
-
-;; (defn- authorization-plan
-;;   [])
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Datom normalization
@@ -170,13 +159,13 @@
 
 (defn- make-lookup-table
   [db datoms]
-  (reduce (fn [table [e a v :as datom]]
+  (reduce (fn [table [e a v _t _o :as datom]]
             (let [entry (lookup-table-entry db datom)]
               (cond->> table
                 (not-empty entry)
                 (merge-with conj entry))))
           {}
-          (map (juxt :e :a :v) datoms)))
+          datoms))
 
 (defn- normalize-datom
   [db datom]
@@ -192,11 +181,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Datom broadcasting
 
+(defn- authorization-plan
+  [db authz-rules datoms]
+  (d/q '[:find ?datom ?cid
+         :keys  datom  conn-id
+         :in $ % [?datom ...]
+         :where
+         (authorize ?datom ?user)
+         [?user :aws.apigw.ws.conn/id ?cid]]
+       db authz-rules datoms))
+
 (defn- broadcast-datoms!
   [config db datoms]
   (let [conn-ids    (all-conn-ids db)
-        table       (make-lookup-table db datoms)
-        norm-datoms (mapv (partial normalize-datom db) datoms)
+        norm-datoms (map (partial normalize-datom db) datoms)
+        plan        (authorization-plan db (:authz config) norm-datoms)
+        _ (prn plan)
+        table       (make-lookup-table db norm-datoms)
         data        {:datoms       norm-datoms
                      :eid->lookups table}]
     (when-not (empty? table)
