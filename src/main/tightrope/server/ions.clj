@@ -67,6 +67,9 @@
   [config]
   (d/db (get-conn config)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; WebSocket connection storage
+
 (defn all-conn-ids
   [db]
   (->>
@@ -130,7 +133,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Datom normalization
 
-(defn eid->lookups
+(defn- eid->lookups
   [db eid]
   (->> (d/q '[:find ?ident ?val
               :in $ ?e
@@ -183,25 +186,30 @@
 
 (defn- authorization-plan
   [db authz-rules datoms]
-  (d/q '[:find ?datom ?cid
-         :keys  datom  conn-id
-         :in $ % [?datom ...]
-         :where
-         (authorize ?datom ?user)
-         [?user :aws.apigw.ws.conn/id ?cid]]
-       db authz-rules datoms))
+  (->> (d/q '[:find ?datom ?cid
+              :keys  datom  conn-id
+              :in $ % [?datom ...]
+              :where
+              (authorize ?datom ?user)
+              [?user :aws.apigw.ws.conn/id ?cid]]
+            db authz-rules datoms)
+       (reduce (fn [plan {:keys [datom conn-id]}]
+                 (update plan conn-id (fnil conj []) datom))
+               {})))
 
 (defn- broadcast-datoms!
   [config db datoms]
   (let [conn-ids    (all-conn-ids db)
         norm-datoms (map (partial normalize-datom db) datoms)
-        plan        (authorization-plan db (:authz config) norm-datoms)
-        _ (prn plan)
-        table       (make-lookup-table db norm-datoms)
-        data        {:datoms       norm-datoms
-                     :eid->lookups table}]
-    (when-not (empty? table)
-      (apply send-data! config data conn-ids))))
+        authz-rules (get-in config [:remote :authz-rules])
+        plan        (authorization-plan db authz-rules norm-datoms)]
+    (prn plan)
+    (doseq [[cid datoms] plan
+            :let         [table (make-lookup-table db datoms)
+                          data  {:datoms       datoms
+                                 :eid->lookups table}]
+            :when        (not-empty table)]
+      (send-data! config data cid))))
 
 (defn- broadcast-tx-result!
   [config tx-data]
@@ -216,7 +224,7 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; WebSocket connection management
+;; WebSocket handshaking and events
 
 (pc/defmutation complete-handshake!
   [{:keys [request conn config]} {:aws.apigw.ws.conn/keys [id]}]

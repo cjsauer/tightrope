@@ -158,6 +158,39 @@
 
 (def schan (atom nil))
 
+(defn- ref?
+  [schema attr]
+  (= :db.type/ref
+     (-> schema attr :db/valueType)))
+
+(defn- datom-integration
+  [db eid->local [e a v tx op]]
+  [(if op :db/add :db/retract)
+   (eid->local e)
+   a
+   (if (ref? (:schema db) a)
+     (eid->local v)
+     v)])
+
+(defn- build-eid-translation-table
+  [db eid->lookups]
+  (let [entid (partial ds/entid db)]
+    (reduce (fn [table [eid lookups]]
+              (let [local-eid (or (first (keep entid lookups))
+                                  (ds/tempid nil))]
+                (assoc table eid local-eid)))
+            {}
+            eid->lookups)))
+
+(defn- integrate-datom-payload
+  [{:keys [conn] :as ctx} payload]
+  (let [db         (ds/db conn)
+        eid->local (build-eid-translation-table db (:eid->lookups payload))
+        tx-data    (map (partial datom-integration db eid->local)
+                        (:datoms payload))]
+    (prn tx-data)
+    (ds/transact! conn tx-data)))
+
 (defn- ws-loop!
   [ctx server-chan]
   (reset! schan server-chan)
@@ -166,12 +199,9 @@
       (when error
         (js/console.warn error))
       (when message
-        ;; TODO: transact incoming payloads into db
         (prn message)
+        (integrate-datom-payload ctx message)
         (recur)))))
-
-;; TODO: handshake needs one more step: calling the `complete-handshake` mutation
-;; on the server in order to link the connection ID with a user-entity
 
 (defn- handshake!
   [ctx server-chan]
@@ -190,7 +220,7 @@
                           :conn-id)]
           (println "tightrope: WebSocket connection ID received" conn-id)
           (<! (mutate! ctx 'tightrope.server.ions/complete-handshake! {:aws.apigw.ws.conn/id conn-id}))
-          (println "tightrope: handshake complete, starting WS loop")
+          (println "tightrope: WebSocket handshake complete, starting WS loop")
           (ws-loop! ctx server-chan))))))
 
 (defn install-websockets!
